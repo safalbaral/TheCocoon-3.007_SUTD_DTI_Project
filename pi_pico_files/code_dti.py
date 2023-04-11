@@ -12,6 +12,7 @@ from adafruit_io.adafruit_io import IO_MQTT
 import adafruit_minimqtt.adafruit_minimqtt as MQTT
 import adafruit_dht
 import adafruit_bh1750
+import adafruit_vl53l0x
 from adafruit_motor import motor
 from pioasm_neopixel_bg import NeoPixelBackground
 import rainbowio
@@ -23,6 +24,7 @@ print('activated!')
 
 i2c = busio.I2C(scl=board.GP13, sda=board.GP12, frequency=50000)
 light_sensor = adafruit_bh1750.BH1750(i2c)
+tof_sensor = adafruit_vl53l0x.VL53L0X(i2c)
 
 dht_sensor = adafruit_dht.DHT11(board.GP14)
 
@@ -33,6 +35,7 @@ pwm17_motor1 = pwmio.PWMOut(board.GP17, frequency=1000)
 motor_1 = motor.DCMotor(pwm16_motor1, pwm17_motor1)
 motor_1.decay_mode = (motor.SLOW_DECAY)
 
+pwm15_ledfilament = pwmio.PWMOut(board.GP15, frequency=1000)
 pwm11_ledfilament = pwmio.PWMOut(board.GP11, frequency=1000)
 pwm10_ledfilament = pwmio.PWMOut(board.GP10, frequency=1000)
 
@@ -53,15 +56,21 @@ SENSOR_LIST = [
         "OFF": 2,
         "PREV_TIME": -1,
         "VALUE": dht_sensor
+    },
+    {
+        "ON": 2,
+        "OFF": 2,
+        "PREV_TIME": -1,
+        "VALUE": tof_sensor
     }
 ]
 
 MOTOR_LIST = [
     {
-        "ON": 5,
-        "OFF": 5,
-        "PREV_TIME": -1,
-        "MOTOR": motor_1
+        "ON": 5,            # Interval to switch on for
+        "OFF": 5,           # Interval to switch off for
+        "PREV_TIME": -1,    # Previous time
+        "MOTOR": motor_1    # Motor object
     }
 ]
 
@@ -81,16 +90,26 @@ LIGHT_LIST = [
         "PIN": pwm10_ledfilament,
         "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
         "FADE_DIR": True
+    },
+    {
+        "ON": 0.01,
+        "OFF": 5,
+        "PREV_TIME": -1,
+        "PIN": pwm15_ledfilament,
+        "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
+        "FADE_DIR": True
     }
 ]
 
 while True:
     now = time.monotonic()
-    # This line of code demonstrates BH1750 light intensity sensor readings
+
+    # This section reads live data from sensors and sends them
     for sensor in SENSOR_LIST:
         if now >= sensor["PREV_TIME"] + sensor["OFF"]:
             if type(sensor["VALUE"]) is adafruit_bh1750.BH1750:
                 sensor["PREV_TIME"] = now
+                ################# TODO SEND DATA TO MQTT HERE #################
                 print("%.2f Lux" % sensor["VALUE"].lux)
 
             if type(sensor["VALUE"]) is adafruit_dht.DHT11:
@@ -102,11 +121,8 @@ while True:
                         print('is none!!!')
                     else:
                         temperature_f = temperature_c * (9 / 5) + 32
-                        print(
-                            "Temp: {:.1f} F / {:.1f} C    Humidity: {}% ".format(
-                                temperature_f, temperature_c, humidity
-                            )
-                        )
+                        ################# TODO SEND DATA TO MQTT HERE #################
+                        print("Temp: {:.1f} F / {:.1f} C    Humidity: {}% ".format(temperature_f, temperature_c, humidity))
                 except RuntimeError as error:
                     # Errors happen fairly often, DHT's are hard to read, just keep going
                     print('DHT error: ', error.args[0])
@@ -114,6 +130,11 @@ while True:
                 except Exception as error:
                     print('DHT related error: ', error.args[0])
                     pass
+            
+            if type(sensor["VALUE"]) is adafruit_vl53l0x.VL53L0X:
+                sensor["PREV_TIME"] = now
+                ################# TODO SEND DATA TO MQTT HERE #################
+                print('Range: {}mm'.format(sensor["VALUE"].range))
 
 
     # This section of code demonstrates DHT11 temp/humidity sensor readings
