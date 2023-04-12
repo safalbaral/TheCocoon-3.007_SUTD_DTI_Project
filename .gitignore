@@ -23,5 +23,5 @@ dist-ssr
 *.sln
 *.sw?
 
-# ignore TOML file as it contains credentials
+# Secrets
 pi_pico_files/settings.toml
