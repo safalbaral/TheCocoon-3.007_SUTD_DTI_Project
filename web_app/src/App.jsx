@@ -91,9 +91,7 @@ const MainScreen = ({changeActiveScreen}) => {
   initializeBackground()
 
   const handleOptionChange = (event) => {
-    console.log(`SET SELECTED OPTION ${selectedOption}`)
     setSelectedOption(event.target.value); // Update selected option in state
-    console.log(`SET SELECTED OPTION ${selectedOption}`)
   }
 
   const handleClick = () => {
