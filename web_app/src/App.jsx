@@ -8,11 +8,21 @@ import axios from 'axios';
 import { useState, useEffect } from 'react'
 import './App.css';
 
-import Paho from 'paho-mqtt';
+//MQTT START
+import * as mqtt from "mqtt";
 
-let client = Paho.Client(location.hostname, Number(location.port), "clientId");
+const options = {
+  username: import.meta.env.AIO_USERNAME,
+  password: import.meta.env.AIO_KEY,
+}
 
-const BROKER_URL = 'mqtt://192.168.102.250:1883'
+const client = mqtt.connect('ws://io.adafruit.com', options);
+
+client.on('connect', () => {
+  console.log('Connected');
+})
+
+//MQTT END
 
 const weatherStates = [
   {
@@ -38,7 +48,20 @@ const weatherStates = [
 ]
 
 
-const SensorsScreen = ({changeActiveScreen, sensorsData}) => {
+const SensorsScreen = ({changeActiveScreen}) => {
+  const [sensorsData, setSensorsData] = useState({
+    'data': '123',
+    'other data': '456'
+  });
+
+  client.unsubscribe('neelonoon/feeds/project.scenario')
+  client.subscribe('neelonoon/feeds/project.scenario')
+
+
+  client.on('message', (topic, message) => {
+    console.log(`Message from ${topic}, message"${message}`)
+  })
+
   return(
     <div class='main-card container d-flex justify-content-center'>
       <div class="container mt-5">
@@ -48,6 +71,7 @@ const SensorsScreen = ({changeActiveScreen, sensorsData}) => {
               <i class="bi bi-cpu"></i>
               <h2 class="card-title"> Realtime Sensor Data </h2>
             </div>
+            <RenderSensors sensorsData={sensorsData}/>
             <div class="row mt-4">
               <div class="col-md-12 text-center">
                 <button class="btn btn-secondary" onClick={changeActiveScreen}>Access Weather Panel</button>
@@ -58,6 +82,22 @@ const SensorsScreen = ({changeActiveScreen, sensorsData}) => {
         </div>
       </div>
   )
+}
+
+const RenderSensors = ({sensorsData}) => {
+  console.log(sensorsData)
+  return (
+    <div>
+      {Object.entries(sensorsData).map(([data, value]) => ( 
+        <div className="col-md-6" key={data}>
+          <div>
+            <h3>{data}</h3>
+            <p><strong>{value}</strong></p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 const MainScreen = ({changeActiveScreen}) => {
@@ -141,10 +181,6 @@ const MainScreen = ({changeActiveScreen}) => {
 function App() {
   const [activeScreen, setActiveScreen] = useState('weather');
 
-  const [sensorsData, setSensorsData] = useState({
-    'data': '123',
-    'other data': '456'
-  });
   
   console.log(`ACTIVE SCREEN! ${activeScreen}`)  
 
@@ -161,7 +197,7 @@ function App() {
     return(<MainScreen changeActiveScreen={changeActiveScreen1}/>)
   } else if (activeScreen === 'sensor') {
     console.log('Rendering other screen')
-    return(<SensorsScreen changeActiveScreen={changeActiveScreen} sensorsData={sensorsData}/>)
+    return(<SensorsScreen changeActiveScreen={changeActiveScreen}/>)
   }
 }
 
