@@ -102,7 +102,6 @@ const RenderSensors = ({sensorsData}) => {
 
 const MainScreen = ({changeActiveScreen}) => {
   const [weatherIndex, setWeatherIndex] = useState(0)
-  const PICO_IP_ADDRESS = '192.168.100.254'
 
   const initializeBackground = () => {
       document.body.style.backgroundImage = `url(${weatherStates[weatherIndex].background_image})`;
@@ -116,26 +115,8 @@ const MainScreen = ({changeActiveScreen}) => {
       document.body.style.backgroundImage = `url(${weatherStates[nextWeatherIndex].background_image})`;
       //document.body.style.backgroundColor = weatherStates[nextWeatherIndex].background_color;
       document.querySelector('.main-card').style.backgroundImage = weatherStates[nextWeatherIndex].background_gradient;
-      blinkLED(weatherStates[nextWeatherIndex].name)
+      console.log('Clicked')
   }
-
-  const blinkLED = async (weather) => {
-    if(weather === 'Sunny Weather') {
-      try {
-        const response = await axios.post(`http://${PICO_IP_ADDRESS}`, '1');
-        console.log(response.data);
-      } catch (error) {
-        console.error(error);
-    }
-  } else {
-      try {
-        const response = await axios.post(`http://${PICO_IP_ADDRESS}`, '2');
-        console.log(response.data);
-      } catch (error) {
-        console.error(error);
-    }
-  }
-}
 
   return (
     <div class='main-card container d-flex'>
