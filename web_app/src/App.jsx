@@ -8,8 +8,11 @@ import axios from 'axios';
 import { useState, useEffect } from 'react'
 import './App.css';
 
-import { WebSocketServer } from 'ws';
+import Paho from 'paho-mqtt';
 
+let client = Paho.Client(location.hostname, Number(location.port), "clientId");
+
+const BROKER_URL = 'mqtt://192.168.102.250:1883'
 
 const weatherStates = [
   {
@@ -136,16 +139,6 @@ const MainScreen = ({changeActiveScreen}) => {
 
 
 function App() {
-  const wss = new WebSocketServer({ port: 8080 });
-
-  wss.on('connection', function connection(ws) {
-    ws.on('message', function message(data) {
-      console.log(`received: %s ${data}`);
-    });
-
-    ws.send('something');
-  });
-
   const [activeScreen, setActiveScreen] = useState('weather');
 
   const [sensorsData, setSensorsData] = useState({
