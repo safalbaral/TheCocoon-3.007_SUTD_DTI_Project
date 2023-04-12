@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# ignore TOML file as it contains credentials
+pi_pico_files/settings.toml
