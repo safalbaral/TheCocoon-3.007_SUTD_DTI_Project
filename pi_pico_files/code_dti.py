@@ -179,7 +179,49 @@ LIGHT_LIST = [
 ]
 
 
-################ Main program loop ################
+# connect to wifi
+try:
+    if wifi.radio.ipv4_address is None:
+        print("connecting to wifi")
+        wifi.radio.connect(os.getenv('CIRCUITPY_WIFI_SSID'),
+                        os.getenv('CIRCUITPY_WIFI_PASSWORD'))
+except Exception as e:
+    print("Failed to connect to Wi-Fi: ", repr(e))
+    print("Resetting microcontroller in 30 seconds")
+    time.sleep(30)
+    microcontroller.reset()
+
+print(f"local address {wifi.radio.ipv4_address}")
+
+aio_username = os.getenv('AIO_USERNAME')
+aio_key = os.getenv('AIO_KEY')
+
+try:
+    pool = socketpool.SocketPool(wifi.radio)
+    mqtt_client = MQTT.MQTT(
+        broker="io.adafruit.com",
+        port=1883,
+        username=aio_username,
+        password=aio_key,
+        socket_pool=pool,
+        ssl_context=ssl.create_default_context()
+    )
+    # Initialize an Adafruit IO MQTT Client
+    io = IO_MQTT(mqtt_client)
+    # Setup callbacks here
+    io.on_connect = connected
+    io.on_disconnect = disconnected
+    io.on_subscribe = subscribe
+    io.add_feed_callback("project.scenario", on_scenario_msg)
+    io.connect()
+    print("connected to io")
+    # Setup subscribes here
+    io.subscribe("project.scenario")
+except Exception as e:
+    print("Error in network setup:\n", repr(e))
+    print("Resetting microcontroller in 20 seconds")
+    time.sleep(20)
+    microcontroller.reset()
 
 while True:
     now = time.monotonic()
