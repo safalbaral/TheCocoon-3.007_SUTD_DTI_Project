@@ -139,8 +139,8 @@ except Exception as e:
 
 print(f"local address {wifi.radio.ipv4_address}")
 
-aio_username = os.getenv('aio_username')
-aio_key = os.getenv('aio_key')
+aio_username = os.getenv('AIO_USERNAME')
+aio_key = os.getenv('AIO_KEY')
 
 try:
     pool = socketpool.SocketPool(wifi.radio)
