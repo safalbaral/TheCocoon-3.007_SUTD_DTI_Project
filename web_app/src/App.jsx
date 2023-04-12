@@ -8,21 +8,7 @@ import axios from 'axios';
 import { useState, useEffect } from 'react'
 import './App.css';
 
-//MQTT START
-import * as mqtt from "mqtt";
-
-const options = {
-  username: import.meta.env.AIO_USERNAME,
-  password: import.meta.env.AIO_KEY,
-}
-
-const client = mqtt.connect('ws://io.adafruit.com', options);
-
-client.on('connect', () => {
-  console.log('Connected');
-})
-
-//MQTT END
+import mqttClient from './utils/mqttConnection.js';
 
 const weatherStates = [
   {
@@ -54,13 +40,32 @@ const SensorsScreen = ({changeActiveScreen}) => {
     'other data': '456'
   });
 
-  client.unsubscribe('neelonoon/feeds/project.scenario')
-  client.subscribe('neelonoon/feeds/project.scenario')
+  useEffect(() => {
+    // Subscribe to the desired MQTT topic
+    mqttClient.subscribe("neelonoon/feeds/project.scenario", () => {
+      'SUBSCRIBED'
+    }); // Replace with your topic
 
+    // Define a callback to handle incoming MQTT messages
+    const handleMqttMessage = (topic, payload) => {
+      // Update the state with the received message
+      console.log('HHHHHHHHH')
+      console.log(JSON.parse(payload.toString())) 
+      setSensorsData(JSON.parse(payload.toString()));
+    };
 
-  client.on('message', (topic, message) => {
-    console.log(`Message from ${topic}, message"${message}`)
-  })
+    // Attach the callback to the MQTT client
+    mqttClient.on("message", handleMqttMessage);
+
+    // Clean up the MQTT client and event listener when the component unmounts
+    return () => {
+      mqttClient.unsubscribe("neelonoon/feeds/project.scenario", () => {
+        'UNSUBSCRIBED'
+      }); // Replace with your topic
+      //mqttClient.off("message", handleMqttMessage);
+      //mqttClient.end();
+    };
+  }, []); // Empty array as the dependency list to run the effect only once
 
   return(
     <div class='main-card container d-flex justify-content-center'>
@@ -162,7 +167,6 @@ const MainScreen = ({changeActiveScreen}) => {
 function App() {
   const [activeScreen, setActiveScreen] = useState('weather');
 
-  
   console.log(`ACTIVE SCREEN! ${activeScreen}`)  
 
   const changeActiveScreen = () => {
