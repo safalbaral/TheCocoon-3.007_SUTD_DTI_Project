@@ -81,6 +81,7 @@ const RenderSensors = ({sensorsData}) => {
 
 const MainScreen = ({changeActiveScreen}) => {
   const [weatherIndex, setWeatherIndex] = useState(0)
+  const [isButtonDisabled, setIsButtonDisabled] = useState(false);
 
   const initializeBackground = () => {
       document.body.style.backgroundImage = `url(${weatherStates[weatherIndex].background_image})`;
@@ -89,11 +90,22 @@ const MainScreen = ({changeActiveScreen}) => {
   initializeBackground()
 
   const handleClick = () => {
+    if (!isButtonDisabled) {
+      setIsButtonDisabled(true); // Disable the button
+
       const nextWeatherIndex = (weatherIndex + 1) % weatherStates.length;
+      mqttClient.publish('neelonoon/feeds/project.scenario', `${weatherStates[weatherIndex].scenario}`, () => {
+        console.log('Published scenario information to mqtt server.')
+      })
+
       setWeatherIndex(nextWeatherIndex);
+
       document.body.style.backgroundImage = `url(${weatherStates[nextWeatherIndex].background_image})`;
-      //document.body.style.backgroundColor = weatherStates[nextWeatherIndex].background_color;
-      document.querySelector('.main-card').style.backgroundImage = weatherStates[nextWeatherIndex].background_gradient;
+      
+      setTimeout(() => {
+        setIsButtonDisabled(false); // Enable the button after 5 seconds
+      }, 5000);
+    }
   }
 
   return (
@@ -107,12 +119,12 @@ const MainScreen = ({changeActiveScreen}) => {
             </div>
             <RenderSimulatedWeatherData weatherState={weatherStates[weatherIndex]} />
             <div class="row mt-4">
-              <div class="col-md-12 text-center">
-                <button class="btn btn-primary" onClick={handleClick}>Change Weather</button>
-              </div>
-              <div class="col-md-12 text-center mt-2">
-                <button class="btn btn-secondary" onClick={changeActiveScreen}>Access Sensor Panel</button>
-              </div>
+            <div class="col-md-12 text-center">
+          <button class="btn btn-primary" onClick={handleClick} disabled={isButtonDisabled}>Simulate Weather</button>
+        </div>
+        <div class="col-md-12 text-center mt-2">
+          <button class="btn btn-secondary" onClick={changeActiveScreen} disabled={isButtonDisabled}>Access Sensor Panel</button>
+        </div>
             </div>
             </div>
           </div>
