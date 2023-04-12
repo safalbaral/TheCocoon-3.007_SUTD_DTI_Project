@@ -60,9 +60,36 @@ def disconnected(client):
 def on_scenario_msg(client, topic, message):
     # Method called whenever project.scenario has a new value
     print("New message on topic {0}: {1} ".format(topic, message))
+    # one scenario will last forever until it has been turned off
     if message == '1':
         print('scenario 1 invoked')
         pass
+
+################ Helper Functions ################
+
+def mean(data):
+    """Return the sample arithmetic mean of data."""
+    n = len(data)
+    if n < 1:
+        raise ValueError('mean requires at least one data point')
+    return sum(data)/n # in Python 2 use sum(data)/float(n)
+
+def _ss(data):
+    """Return sum of square deviations of sequence data."""
+    c = mean(data)
+    ss = sum((x-c)**2 for x in data)
+    return ss
+
+def stddev(data, ddof=0):
+    """Calculates the population standard deviation
+    by default; specify ddof=1 to compute the sample
+    standard deviation."""
+    n = len(data)
+    if n < 2:
+        raise ValueError('variance requires at least two data points')
+    ss = _ss(data)
+    pvar = ss/(n-ddof)
+    return pvar**0.5
 
 ################ Wifi Connection ################
 try:
@@ -77,8 +104,8 @@ except Exception as e:
     microcontroller.reset()
 print(f"local address {wifi.radio.ipv4_address}")
 
-aio_username = os.getenv('aio_username')
-aio_key = os.getenv('aio_key')
+aio_username = os.getenv('AIO_USERNAME')
+aio_key = os.getenv('AIO_KEY')
 
 ################ Initialise MQTT ################
 try:
@@ -108,11 +135,6 @@ except Exception as e:
     time.sleep(20)
     microcontroller.reset()
 
-
-print('sleeping before activation...')
-time.sleep(5)
-print('activated!')
-
 ################ List of sensors ################
 SENSOR_LIST = [
     {
@@ -130,10 +152,11 @@ SENSOR_LIST = [
         "HEATIND_VALUE": -1     # Heat index
     },
     {
-        "ON": 2,
+        "ON": 1,
         "PREV_TIME": -1,
         "OBJECT": tof_sensor,
-        "PRESENCE_VALUE": -1    # 0 for no human presence, 1 for human presence
+        "VALUES": [],
+        "PRESENCE_VALUE": 0     # 0 for no human presence, 1 for human presence
     },
     {
         "ON": 4,
@@ -178,61 +201,25 @@ LIGHT_LIST = [
     }
 ]
 
-
-# connect to wifi
-try:
-    if wifi.radio.ipv4_address is None:
-        print("connecting to wifi")
-        wifi.radio.connect(os.getenv('CIRCUITPY_WIFI_SSID'),
-                        os.getenv('CIRCUITPY_WIFI_PASSWORD'))
-except Exception as e:
-    print("Failed to connect to Wi-Fi: ", repr(e))
-    print("Resetting microcontroller in 30 seconds")
-    time.sleep(30)
-    microcontroller.reset()
-
-print(f"local address {wifi.radio.ipv4_address}")
-
-aio_username = os.getenv('AIO_USERNAME')
-aio_key = os.getenv('AIO_KEY')
-
-try:
-    pool = socketpool.SocketPool(wifi.radio)
-    mqtt_client = MQTT.MQTT(
-        broker="io.adafruit.com",
-        port=1883,
-        username=aio_username,
-        password=aio_key,
-        socket_pool=pool,
-        ssl_context=ssl.create_default_context()
-    )
-    # Initialize an Adafruit IO MQTT Client
-    io = IO_MQTT(mqtt_client)
-    # Setup callbacks here
-    io.on_connect = connected
-    io.on_disconnect = disconnected
-    io.on_subscribe = subscribe
-    io.add_feed_callback("project.scenario", on_scenario_msg)
-    io.connect()
-    print("connected to io")
-    # Setup subscribes here
-    io.subscribe("project.scenario")
-except Exception as e:
-    print("Error in network setup:\n", repr(e))
-    print("Resetting microcontroller in 20 seconds")
-    time.sleep(20)
-    microcontroller.reset()
+print('sleeping before activation...')
+time.sleep(5)
+print('activated!')
 
 while True:
     now = time.monotonic()
+    # ping adafruit MQTT. known bug that this will be blocking and cause delays, so account for it accordingly
+    try:
+        io.loop()
+    except Exception as e:
+        print('io.loop exception:', repr(e))
 
     # This section reads live data from sensors and sends them
     for sensor in SENSOR_LIST:
         if now >= sensor["PREV_TIME"] + sensor["ON"]:
             if type(sensor["OBJECT"]) is adafruit_bh1750.BH1750:
                 sensor["PREV_TIME"] = now
-                ################# TODO SEND DATA TO MQTT HERE #################
                 print("%.2f Lux" % sensor["OBJECT"].lux)
+                sensor["LUX_VALUE"] = sensor["OBJECT"].lux
 
             if type(sensor["OBJECT"]) is adafruit_dht.DHT11:
                 sensor["PREV_TIME"] = now
@@ -243,7 +230,8 @@ while True:
                         print('is none!!!')
                     else:
                         temperature_f = temperature_c * (9 / 5) + 32
-                        ################# TODO SEND DATA TO MQTT HERE #################
+                        sensor["TEMP_VALUE"] = temperature_c
+                        sensor["HUMD_VALUE"] = humidity
                         print("Temp: {:.1f} F / {:.1f} C    Humidity: {}% ".format(temperature_f, temperature_c, humidity))
                 except RuntimeError as error:
                     # Errors happen fairly often, DHT's are hard to read, just keep going
@@ -255,8 +243,13 @@ while True:
             
             if type(sensor["OBJECT"]) is adafruit_vl53l0x.VL53L0X:
                 sensor["PREV_TIME"] = now
-                ################# TODO SEND DATA TO MQTT HERE #################
-                print('Range: {}mm'.format(sensor["OBJECT"].range))
+                sensor["VALUES"].append(sensor["OBJECT"].range)
+                if len(sensor["VALUES"]) > 10:
+                    sensor["VALUES"].pop(0)
+                if len(sensor["VALUES"]) > 1:
+                    # Human presence is based on whether the standard deviation exceeds 10, which is reasonable
+                    sensor["PRESENCE_VALUE"] = stddev(sensor["VALUES"]) > 10
+                    print('ToF Standard Deviation: {}mm'.format(stddev(sensor["VALUES"])))
             
             if type(sensor["OBJECT"]) is IO_MQTT:
                 sensor["PREV_TIME"] = now
@@ -277,25 +270,25 @@ while True:
                     motor["PREV_TIME"] = now
                     motor["MOTOR"].throttle = -1
 
-    for light in LIGHT_LIST:
-        if now >= light["PREV_TIME"] + light["ON"]:
-            if light["FADE_DIR"] == True:
-                # increase brightness
-                light["PWM"] += 255
-            elif light["FADE_DIR"] == False:
-                # decrease brightness
-                light["PWM"] -= 255
+    # for light in LIGHT_LIST:
+    #     if now >= light["PREV_TIME"] + light["ON"]:
+    #         if light["FADE_DIR"] == True:
+    #             # increase brightness
+    #             light["PWM"] += 255
+    #         elif light["FADE_DIR"] == False:
+    #             # decrease brightness
+    #             light["PWM"] -= 255
             
-            # apply changes
-            light["PIN"].duty_cycle = light["PWM"]
-            light["PREV_TIME"] = now
+    #         # apply changes
+    #         light["PIN"].duty_cycle = light["PWM"]
+    #         light["PREV_TIME"] = now
 
-            # change direction of fade
-            if light["PWM"] < 0x0002:
-                light["FADE_DIR"] = True
-                # increase brightness
-            elif light["PWM"] > 0xfff1:
-                light["FADE_DIR"] = False
-                # decrease brightness
+    #         # change direction of fade
+    #         if light["PWM"] < 0x0002:
+    #             light["FADE_DIR"] = True
+    #             # increase brightness
+    #         elif light["PWM"] > 0xfff1:
+    #             light["FADE_DIR"] = False
+    #             # decrease brightness
             
-    pixels.fill(rainbowio.colorwheel(supervisor.ticks_ms() // 16))
+    # pixels.fill(rainbowio.colorwheel(supervisor.ticks_ms() // 16))
