@@ -15,6 +15,7 @@ export const weatherStates = [
         'Motorized shading of tree': 'Remains retracted',
         'LED lighting of large tree': 'Remains off'
       },
+      'scenario': 's1',
       'weather': 'Sunny',
       'background_image': s1_background,
       'icon_class': 'bi bi-sun' // icon class for Sunny weather
@@ -30,6 +31,7 @@ export const weatherStates = [
         'Motorized shading of tree': 'Remains retracted',
         'LED lighting of large tree': 'Remains off'
       },
+      'scenario': 's2',
       'weather': 'Extremely Sunny',
       'background_image': s2_background,
       'icon_class': 'bi bi-sun' // icon class for Sunny weather
@@ -45,6 +47,7 @@ export const weatherStates = [
         'Motorized shading of tree': 'Extends to full extent',
         'LED lighting of large tree': 'Turns on'
       },
+      'scenario': 's3',
       'weather': 'Rainy',
       'background_image': s3_background,
       'icon_class': 'bi bi-cloud-rain' // icon class for Rainy weather
@@ -60,6 +63,7 @@ export const weatherStates = [
         'Motorized shading of tree': 'Remains retracted',
         'LED lighting of large tree': 'Remains retracted'
       },
+      'scenario': 's4',
       'weather': 'Clear',
       'background_image': s4_background,
       'icon_class': 'bi bi-moon' // icon class for Clear weather
