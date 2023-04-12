@@ -1,38 +1,12 @@
 import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap-icons/font/bootstrap-icons.css';
 
-import sunny_background from "./assets/images/sunny_weather.jpg";
-import rainy_background from "./assets/images/rainy_weather.jpg";
-
 import axios from 'axios';
 import { useState, useEffect } from 'react'
 import './App.css';
 
 import mqttClient from './utils/mqttConnection.js';
-
-const weatherStates = [
-  {
-    name: 'Sunny Weather',
-    icon_class: 'bi bi-sun',
-    pavillion_lights: 'Minimally Lit',
-    shades: 'Partially Deployed',
-    lighting_mood: 'Natural lighting, minimal artifical mood lighting',
-    background_gradient: "linear-gradient(315deg, #bdd4e7 0%, #8693ab 74%);",
-    background_color: 'orange',
-    background_image: sunny_background
-  },
-  {
-    name: 'Rainy Weather',
-    icon_class: 'bi bi-cloud-drizzle',
-    pavillion_lights: 'All lights Lit',
-    shades: 'Fully Deployed',
-    lighting_mood: 'Warm lighting through LED lights',
-    background_gradient: "linear-gradient(315deg, #bdd4e7 0%, #8693ab 74%);",
-    background_color: 'blue',
-    background_image: rainy_background
-  }
-]
-
+import { weatherStates } from './utils/weatherStates';
 
 const SensorsScreen = ({changeActiveScreen}) => {
   const [sensorsData, setSensorsData] = useState({
@@ -61,9 +35,7 @@ const SensorsScreen = ({changeActiveScreen}) => {
     return () => {
       mqttClient.unsubscribe("neelonoon/feeds/project.scenario", () => {
         'UNSUBSCRIBED'
-      }); // Replace with your topic
-      //mqttClient.off("message", handleMqttMessage);
-      //mqttClient.end();
+      }); 
     };
   }, []); // Empty array as the dependency list to run the effect only once
 
@@ -76,7 +48,9 @@ const SensorsScreen = ({changeActiveScreen}) => {
               <i class="bi bi-cpu"></i>
               <h2 class="card-title"> Realtime Sensor Data </h2>
             </div>
-            <RenderSensors sensorsData={sensorsData}/>
+            <div className="row mt-4">
+              <RenderSensors sensorsData={sensorsData}/>
+            </div>
             <div class="row mt-4">
               <div class="col-md-12 text-center">
                 <button class="btn btn-secondary" onClick={changeActiveScreen}>Access Weather Panel</button>
@@ -120,7 +94,6 @@ const MainScreen = ({changeActiveScreen}) => {
       document.body.style.backgroundImage = `url(${weatherStates[nextWeatherIndex].background_image})`;
       //document.body.style.backgroundColor = weatherStates[nextWeatherIndex].background_color;
       document.querySelector('.main-card').style.backgroundImage = weatherStates[nextWeatherIndex].background_gradient;
-      console.log('Clicked')
   }
 
   return (
@@ -130,24 +103,9 @@ const MainScreen = ({changeActiveScreen}) => {
           <div class="card-body">
             <div className="d-flex flex-row align-items-center">
               <i class={weatherStates[weatherIndex].icon_class}></i>
-              <h2 class="card-title"> {weatherStates[weatherIndex].name} </h2>
+              <h2 class="card-title"> {weatherStates[weatherIndex].weather} </h2>
             </div>
-            <div class="row">
-              <div class="col-md-6">
-                <div>
-                  <h3>Pavillion Lights</h3>
-                  <p><strong>{weatherStates[weatherIndex].pavillion_lights}</strong></p>
-                </div>
-                <div>
-                  <h3>Shades</h3>
-                  <p><strong>{weatherStates[weatherIndex].shades}</strong></p>
-                </div>
-              </div>
-              <div class="col-md-6">
-                <h3>Lighting Mood</h3>
-                <p><strong>{weatherStates[weatherIndex].lighting_mood}</strong></p>
-              </div>
-            </div>
+            <RenderSimulatedWeatherData weatherState={weatherStates[weatherIndex]} />
             <div class="row mt-4">
               <div class="col-md-12 text-center">
                 <button class="btn btn-primary" onClick={handleClick}>Change Weather</button>
@@ -163,6 +121,21 @@ const MainScreen = ({changeActiveScreen}) => {
   )
 }
 
+const RenderSimulatedWeatherData = ({weatherState}) => {
+  return (
+    <div className='row'>
+      {Object.entries(weatherState.data_to_render).map(([data, value], index) =>  {
+        const backgroundColor = '#f8f8f8' 
+        return (
+          <div className='col-md-6' key={data} style={{border: '1px solid #ddd', borderRadius: '4px', padding: '10px', marginBottom: '1px', backgroundColor}}>
+            <h3 style={{fontSize: '18px', fontWeight: 'bold', marginBottom: '5px'}}>{data}</h3>
+            <p style={{fontSize: '14px', color: '#444'}}><strong>{value}</strong></p>
+          </div>
+        )
+      })}
+    </div>
+  );
+}
 
 function App() {
   const [activeScreen, setActiveScreen] = useState('weather');
