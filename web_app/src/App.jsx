@@ -132,7 +132,7 @@ const MainScreen = ({changeActiveScreen}) => {
                   <option value={selectedOption}>Select a weather condition</option>
                   { weatherStates.map((weatherState) => {
                     return(
-                      <option value={weatherState.id}>{weatherState.weather}</option>
+                      <option value={weatherState.id} disabled={Number(selectedOption) === Number(weatherState.id) ? true : false}>{weatherState.weather}</option>
                     )
                   }) }
                 </select>
