@@ -7,6 +7,7 @@ import './App.css';
 
 import mqttClient from './utils/mqttConnection.js';
 import { weatherStates } from './utils/weatherStates';
+import RenderSimulatedWeatherData from './components/RenderSimulatedWeatherData'
 
 const SensorsScreen = ({changeActiveScreen}) => {
   const [sensorsData, setSensorsData] = useState({
@@ -23,7 +24,6 @@ const SensorsScreen = ({changeActiveScreen}) => {
     // Define a callback to handle incoming MQTT messages
     const handleMqttMessage = (topic, payload) => {
       // Update the state with the received message
-      console.log('HHHHHHHHH')
       console.log(JSON.parse(payload.toString())) 
       setSensorsData(JSON.parse(payload.toString()));
     };
@@ -119,22 +119,6 @@ const MainScreen = ({changeActiveScreen}) => {
         </div>
       </div>
   )
-}
-
-const RenderSimulatedWeatherData = ({weatherState}) => {
-  return (
-    <div className='row'>
-      {Object.entries(weatherState.data_to_render).map(([data, value], index) =>  {
-        const backgroundColor = '#f8f8f8' 
-        return (
-          <div className='col-md-6' key={data} style={{border: '1px solid #ddd', borderRadius: '4px', padding: '10px', marginBottom: '1px', backgroundColor}}>
-            <h3 style={{fontSize: '18px', fontWeight: 'bold', marginBottom: '5px'}}>{data}</h3>
-            <p style={{fontSize: '14px', color: '#444'}}><strong>{value}</strong></p>
-          </div>
-        )
-      })}
-    </div>
-  );
 }
 
 function App() {
