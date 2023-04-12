@@ -18,33 +18,7 @@ from pioasm_neopixel_bg import NeoPixelBackground
 import rainbowio
 import supervisor
 
-# Define callback functions which will be called when certain events happen.
-# pylint: disable=unused-argument
-def connected(client):
-    # Connected function will be called when the client is connected to Adafruit IO.
-    print("Connected to Adafruit IO! ")
-
-def subscribe(client, userdata, topic, granted_qos):
-    # This method is called when the client subscribes to a new feed.
-    print("Subscribed to {0} with QOS level {1}".format(topic, granted_qos))
-
-# pylint: disable=unused-argument
-def disconnected(client):
-    # Disconnected function will be called when the client disconnects.
-    print("Disconnected from Adafruit IO!")
-
-def on_scenario_msg(client, topic, message):
-    # Method called whenever project.scenario has a new value
-    print("New message on topic {0}: {1} ".format(topic, message))
-    if message == '1':
-        print('scenario 1 invoked')
-        pass
-
-
-print('sleeping before activation...')
-time.sleep(5)
-print('activated!')
-
+################ Initialise hardware ################
 i2c = busio.I2C(scl=board.GP13, sda=board.GP12, frequency=50000)
 light_sensor = adafruit_bh1750.BH1750(i2c)
 tof_sensor = adafruit_vl53l0x.VL53L0X(i2c)
@@ -67,24 +41,104 @@ NUM_PIXELS = 20
 pixels = NeoPixelBackground(NEOPIXEL, NUM_PIXELS)
 pixels.brightness = 0.15
 
+
+################ MQTT Callbacks ################
+# pylint: disable=unused-argument
+def connected(client):
+    # Connected function will be called when the client is connected to Adafruit IO.
+    print("Connected to Adafruit IO! ")
+
+def subscribe(client, userdata, topic, granted_qos):
+    # This method is called when the client subscribes to a new feed.
+    print("Subscribed to {0} with QOS level {1}".format(topic, granted_qos))
+
+# pylint: disable=unused-argument
+def disconnected(client):
+    # Disconnected function will be called when the client disconnects.
+    print("Disconnected from Adafruit IO!")
+
+def on_scenario_msg(client, topic, message):
+    # Method called whenever project.scenario has a new value
+    print("New message on topic {0}: {1} ".format(topic, message))
+    if message == '1':
+        print('scenario 1 invoked')
+        pass
+
+################ Wifi Connection ################
+try:
+    if wifi.radio.ipv4_address is None:
+        print("connecting to wifi")
+        wifi.radio.connect(os.getenv('CIRCUITPY_WIFI_SSID'),
+                        os.getenv('CIRCUITPY_WIFI_PASSWORD'))
+except Exception as e:
+    print("Failed to connect to Wi-Fi: ", repr(e))
+    print("Resetting microcontroller in 30 seconds")
+    time.sleep(30)
+    microcontroller.reset()
+print(f"local address {wifi.radio.ipv4_address}")
+
+aio_username = os.getenv('aio_username')
+aio_key = os.getenv('aio_key')
+
+################ Initialise MQTT ################
+try:
+    pool = socketpool.SocketPool(wifi.radio)
+    mqtt_client = MQTT.MQTT(
+        broker="io.adafruit.com",
+        port=1883,
+        username=aio_username,
+        password=aio_key,
+        socket_pool=pool,
+        ssl_context=ssl.create_default_context()
+    )
+    # Initialize an Adafruit IO MQTT Client
+    io = IO_MQTT(mqtt_client)
+    # Setup callbacks here
+    io.on_connect = connected
+    io.on_disconnect = disconnected
+    io.on_subscribe = subscribe
+    io.add_feed_callback("project.scenario", on_scenario_msg)
+    io.connect()
+    print("connected to io")
+    # Setup subscribes here
+    io.subscribe("project.scenario")
+except Exception as e:
+    print("Error in network setup:\n", repr(e))
+    print("Resetting microcontroller in 20 seconds")
+    time.sleep(20)
+    microcontroller.reset()
+
+
+print('sleeping before activation...')
+time.sleep(5)
+print('activated!')
+
+################ List of sensors ################
 SENSOR_LIST = [
     {
-        "ON": 2,
-        "OFF": 2,
+        "ON": 2,                # Trigger time, every 2 seconds
         "PREV_TIME": -1,
-        "VALUE": light_sensor
+        "OBJECT": light_sensor,
+        "LUX_VALUE": -1
     },
     {
         "ON": 2,
-        "OFF": 2,
         "PREV_TIME": -1,
-        "VALUE": dht_sensor
+        "OBJECT": dht_sensor,
+        "TEMP_VALUE": -1,       # Temperature in deg C
+        "HUMD_VALUE": -1,       # Humidity in percentage
+        "HEATIND_VALUE": -1     # Heat index
     },
     {
         "ON": 2,
-        "OFF": 2,
         "PREV_TIME": -1,
-        "VALUE": tof_sensor
+        "OBJECT": tof_sensor,
+        "PRESENCE_VALUE": -1    # 0 for no human presence, 1 for human presence
+    },
+    {
+        "ON": 4,
+        "PREV_TIME": -1,
+        "OBJECT": io
     }
 ]
 
@@ -125,66 +179,24 @@ LIGHT_LIST = [
 ]
 
 
-# connect to wifi
-try:
-    if wifi.radio.ipv4_address is None:
-        print("connecting to wifi")
-        wifi.radio.connect(os.getenv('CIRCUITPY_WIFI_SSID'),
-                        os.getenv('CIRCUITPY_WIFI_PASSWORD'))
-except Exception as e:
-    print("Failed to connect to Wi-Fi: ", repr(e))
-    print("Resetting microcontroller in 30 seconds")
-    time.sleep(30)
-    microcontroller.reset()
-
-print(f"local address {wifi.radio.ipv4_address}")
-
-aio_username = os.getenv('aio_username')
-aio_key = os.getenv('aio_key')
-
-try:
-    pool = socketpool.SocketPool(wifi.radio)
-    mqtt_client = MQTT.MQTT(
-        broker="io.adafruit.com",
-        port=1883,
-        username=aio_username,
-        password=aio_key,
-        socket_pool=pool,
-        ssl_context=ssl.create_default_context()
-    )
-    # Initialize an Adafruit IO MQTT Client
-    io = IO_MQTT(mqtt_client)
-    # Setup callbacks here
-    io.on_connect = connected
-    io.on_disconnect = disconnected
-    io.on_subscribe = subscribe
-    io.add_feed_callback("project.scenario", on_scenario_msg)
-    io.connect()
-    print("connected to io")
-    # Setup subscribes here
-    io.subscribe("project.scenario")
-except Exception as e:
-    print("Error in network setup:\n", repr(e))
-    print("Resetting microcontroller in 20 seconds")
-    time.sleep(20)
-    microcontroller.reset()
+################ Main program loop ################
 
 while True:
     now = time.monotonic()
 
     # This section reads live data from sensors and sends them
     for sensor in SENSOR_LIST:
-        if now >= sensor["PREV_TIME"] + sensor["OFF"]:
-            if type(sensor["VALUE"]) is adafruit_bh1750.BH1750:
+        if now >= sensor["PREV_TIME"] + sensor["ON"]:
+            if type(sensor["OBJECT"]) is adafruit_bh1750.BH1750:
                 sensor["PREV_TIME"] = now
                 ################# TODO SEND DATA TO MQTT HERE #################
-                print("%.2f Lux" % sensor["VALUE"].lux)
+                print("%.2f Lux" % sensor["OBJECT"].lux)
 
-            if type(sensor["VALUE"]) is adafruit_dht.DHT11:
+            if type(sensor["OBJECT"]) is adafruit_dht.DHT11:
                 sensor["PREV_TIME"] = now
                 try:
-                    temperature_c = sensor["VALUE"].temperature
-                    humidity = sensor["VALUE"].humidity
+                    temperature_c = sensor["OBJECT"].temperature
+                    humidity = sensor["OBJECT"].humidity
                     if type(temperature_c) is None:
                         print('is none!!!')
                     else:
@@ -199,30 +211,15 @@ while True:
                     print('DHT related error: ', error.args[0])
                     pass
             
-            if type(sensor["VALUE"]) is adafruit_vl53l0x.VL53L0X:
+            if type(sensor["OBJECT"]) is adafruit_vl53l0x.VL53L0X:
                 sensor["PREV_TIME"] = now
                 ################# TODO SEND DATA TO MQTT HERE #################
-                print('Range: {}mm'.format(sensor["VALUE"].range))
-
-
-    # This section of code demonstrates DHT11 temp/humidity sensor readings
-    # try:
-    #     # Print the values to the serial port
-    #     temperature_c = dht_sensor.temperature
-    #     temperature_f = temperature_c * (9 / 5) + 32
-    #     humidity = dht_sensor.humidity
-    #     print(
-    #         "Temp: {:.1f} F / {:.1f} C    Humidity: {}% ".format(
-    #             temperature_f, temperature_c, humidity
-    #         )
-    #     )
-    # except RuntimeError as error:
-    #     # Errors happen fairly often, DHT's are hard to read, just keep going
-    #     print('DHT error: ', error.args[0])
-    #     continue
-    # except Exception as error:
-    #     dht_sensor.exit()
-    #     raise error
+                print('Range: {}mm'.format(sensor["OBJECT"].range))
+            
+            if type(sensor["OBJECT"]) is IO_MQTT:
+                sensor["PREV_TIME"] = now
+                # Package up all the data and send it to MQTT
+                ################# TODO SEND DATA TO MQTT HERE #################
 
     # every 2 seconds, motor on, motor off, motor reverse, motor off
     if test_motor:
