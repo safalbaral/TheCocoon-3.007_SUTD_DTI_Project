@@ -15,6 +15,7 @@ export const weatherStates = [
         'Motorized shading of tree': 'Remains retracted',
         'LED lighting of large tree': 'Remains off'
       },
+      'id': 0,
       'scenario': 's1',
       'weather': 'Sunny',
       'background_image': s1_background,
@@ -31,6 +32,7 @@ export const weatherStates = [
         'Motorized shading of tree': 'Remains retracted',
         'LED lighting of large tree': 'Remains off'
       },
+      'id': 1,
       'scenario': 's2',
       'weather': 'Extremely Sunny',
       'background_image': s2_background,
@@ -47,6 +49,7 @@ export const weatherStates = [
         'Motorized shading of tree': 'Extends to full extent',
         'LED lighting of large tree': 'Turns on'
       },
+      'id': 2,
       'scenario': 's3',
       'weather': 'Rainy',
       'background_image': s3_background,
@@ -63,6 +66,7 @@ export const weatherStates = [
         'Motorized shading of tree': 'Remains retracted',
         'LED lighting of large tree': 'Remains retracted'
       },
+      'id': 3,
       'scenario': 's4',
       'weather': 'Clear',
       'background_image': s4_background,

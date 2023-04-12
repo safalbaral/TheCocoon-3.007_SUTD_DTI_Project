@@ -82,6 +82,7 @@ const RenderSensors = ({sensorsData}) => {
 const MainScreen = ({changeActiveScreen}) => {
   const [weatherIndex, setWeatherIndex] = useState(0)
   const [isButtonDisabled, setIsButtonDisabled] = useState(false);
+  const [selectedOption, setSelectedOption] = useState('');
 
   const initializeBackground = () => {
       document.body.style.backgroundImage = `url(${weatherStates[weatherIndex].background_image})`;
@@ -89,19 +90,26 @@ const MainScreen = ({changeActiveScreen}) => {
   
   initializeBackground()
 
+  const handleOptionChange = (event) => {
+    console.log(`SET SELECTED OPTION ${selectedOption}`)
+    setSelectedOption(event.target.value); // Update selected option in state
+    console.log(`SET SELECTED OPTION ${selectedOption}`)
+  }
+
   const handleClick = () => {
     if (!isButtonDisabled) {
       setIsButtonDisabled(true); // Disable the button
 
-      const nextWeatherIndex = (weatherIndex + 1) % weatherStates.length;
-      mqttClient.publish('neelonoon/feeds/project.scenario', `${weatherStates[weatherIndex].scenario}`, () => {
-        console.log('Published scenario information to mqtt server.')
-      })
+      const nextWeatherIndex = selectedOption;
 
       setWeatherIndex(nextWeatherIndex);
 
       document.body.style.backgroundImage = `url(${weatherStates[nextWeatherIndex].background_image})`;
-      
+
+      mqttClient.publish('neelonoon/feeds/project.scenario', `${weatherStates[weatherIndex].scenario}`, () => {
+        console.log('Published scenario information to mqtt server.')
+      })
+
       setTimeout(() => {
         setIsButtonDisabled(false); // Enable the button after 5 seconds
       }, 5000);
@@ -120,11 +128,21 @@ const MainScreen = ({changeActiveScreen}) => {
             <RenderSimulatedWeatherData weatherState={weatherStates[weatherIndex]} />
             <div class="row mt-4">
             <div class="col-md-12 text-center">
-          <button class="btn btn-primary" onClick={handleClick} disabled={isButtonDisabled}>Simulate Weather</button>
-        </div>
-        <div class="col-md-12 text-center mt-2">
-          <button class="btn btn-secondary" onClick={changeActiveScreen} disabled={isButtonDisabled}>Access Sensor Panel</button>
-        </div>
+              <select className="form-select" onChange={handleOptionChange}>
+                  <option value={selectedOption}>Select a weather condition</option>
+                  { weatherStates.map((weatherState) => {
+                    return(
+                      <option value={weatherState.id}>{weatherState.weather}</option>
+                    )
+                  }) }
+                </select>
+            </div>
+            <div class="col-md-12 text-center mt-2">
+              <button class="btn btn-primary" onClick={handleClick} disabled={isButtonDisabled}>Simulate Weather</button>
+            </div>
+          <div class="col-md-12 text-center mt-2">
+            <button class="btn btn-secondary" onClick={changeActiveScreen} disabled={isButtonDisabled}>Access Sensor Panel</button>
+          </div>
             </div>
             </div>
           </div>
