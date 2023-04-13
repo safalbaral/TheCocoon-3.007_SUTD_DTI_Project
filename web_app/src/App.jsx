@@ -17,9 +17,9 @@ const SensorsScreen = ({changeActiveScreen}) => {
 
   useEffect(() => {
     // Subscribe to the desired MQTT topic
-    mqttClient.subscribe("neelonoon/feeds/project.scenario", () => {
+    mqttClient.subscribe("neelonoon/feeds/project.sensor-data", () => {
       'SUBSCRIBED'
-    }); // Replace with your topic
+    }); 
 
     // Define a callback to handle incoming MQTT messages
     const handleMqttMessage = (topic, payload) => {
@@ -33,11 +33,33 @@ const SensorsScreen = ({changeActiveScreen}) => {
 
     // Clean up the MQTT client and event listener when the component unmounts
     return () => {
-      mqttClient.unsubscribe("neelonoon/feeds/project.scenario", () => {
+      mqttClient.unsubscribe("neelonoon/feeds/project.sensor-data", () => {
         'UNSUBSCRIBED'
       }); 
     };
   }, []); // Empty array as the dependency list to run the effect only once
+
+  return (
+    <div class='main-card container d-flex'>
+      <div class="container">
+        <div class="card shadow-lg">
+          <div class="card-body">
+            <div className="d-flex flex-row align-items-center">
+              <i class="bi bi-cpu"></i>
+              <h2 class="card-title"> Sensor Data</h2>
+            </div>
+              <p>Updated every 4 seconds</p>
+              <RenderSensors sensorsData={sensorsData}/>
+            <div class="row mt-4">
+              <div class="col-md-12 text-center">
+                <button class="btn btn-secondary" onClick={changeActiveScreen}>Access Weather Panel</button>
+            </div>
+            </div>
+            </div>
+          </div>
+        </div>
+      </div>
+  )
 
   return(
     <div class='main-card container d-flex justify-content-center'>
@@ -66,15 +88,16 @@ const SensorsScreen = ({changeActiveScreen}) => {
 const RenderSensors = ({sensorsData}) => {
   console.log(sensorsData)
   return (
-    <div>
-      {Object.entries(sensorsData).map(([data, value]) => ( 
-        <div className="col-md-6" key={data}>
-          <div>
-            <h3>{data}</h3>
-            <p><strong>{value}</strong></p>
+    <div className='row'>
+      {Object.entries(sensorsData).map(([data, value], index) =>  {
+        const backgroundColor = '#f8f8f8' 
+        return (
+          <div className='col-md-6' key={data} style={{border: '1px solid #ddd', borderRadius: '4px', padding: '10px', marginBottom: '1px', backgroundColor}}>
+            <h3 style={{fontSize: '18px', fontWeight: 'bold', marginBottom: '5px'}}>{data}</h3>
+            <p style={{fontSize: '14px', color: '#444'}}><strong>{value}</strong></p>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   );
 }
