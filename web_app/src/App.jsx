@@ -60,29 +60,6 @@ const SensorsScreen = ({changeActiveScreen}) => {
         </div>
       </div>
   )
-
-  return(
-    <div class='main-card container d-flex justify-content-center'>
-      <div class="container mt-5">
-        <div class="card shadow-lg">
-          <div class="card-body">
-            <div className="d-flex flex-row align-items-center">
-              <i class="bi bi-cpu"></i>
-              <h2 class="card-title"> Realtime Sensor Data </h2>
-            </div>
-            <div className="row mt-4">
-              <RenderSensors sensorsData={sensorsData}/>
-            </div>
-            <div class="row mt-4">
-              <div class="col-md-12 text-center">
-                <button class="btn btn-secondary" onClick={changeActiveScreen}>Access Weather Panel</button>
-              </div>
-            </div>
-            </div>
-          </div>
-        </div>
-      </div>
-  )
 }
 
 const RenderSensors = ({sensorsData}) => {
