@@ -3,7 +3,7 @@ import board
 import busio
 import pwmio
 import microcontroller
-import adafruit_scd30
+import json
 import os
 import ssl
 import wifi
@@ -18,14 +18,17 @@ from pioasm_neopixel_bg import NeoPixelBackground
 import rainbowio
 import supervisor
 
+################ Constants for program settings ################
+test_motor = False  # Power Motor up?
+internet = False    # Connect to internet?
+
+
 ################ Initialise hardware ################
 i2c = busio.I2C(scl=board.GP13, sda=board.GP12, frequency=50000)
 light_sensor = adafruit_bh1750.BH1750(i2c)
 tof_sensor = adafruit_vl53l0x.VL53L0X(i2c)
 
 dht_sensor = adafruit_dht.DHT11(board.GP14)
-
-test_motor = False
 
 pwm16_motor1 = pwmio.PWMOut(board.GP16, frequency=1000)
 pwm17_motor1 = pwmio.PWMOut(board.GP17, frequency=1000)
@@ -37,9 +40,9 @@ pwm11_ledfilament = pwmio.PWMOut(board.GP11, frequency=1000)
 pwm10_ledfilament = pwmio.PWMOut(board.GP10, frequency=1000)
 
 NEOPIXEL = board.GP22
-NUM_PIXELS = 20
+NUM_PIXELS = 3
 pixels = NeoPixelBackground(NEOPIXEL, NUM_PIXELS)
-pixels.brightness = 0.15
+pixels.brightness = 0.5
 
 
 ################ MQTT Callbacks ################
@@ -59,11 +62,17 @@ def disconnected(client):
 
 def on_scenario_msg(client, topic, message):
     # Method called whenever project.scenario has a new value
-    print("New message on topic {0}: {1} ".format(topic, message))
+    #print("New message on topic {0}: {1} ".format(topic, message))
     # one scenario will last forever until it has been turned off
-    if message == '1':
-        print('scenario 1 invoked')
-        pass
+    if topic == 'neelonoon/f/project.scenario':
+        if message == 's1':
+            print('scenario 1 invoked')
+        elif message == 's2':
+            print('scenario 2 invoked')
+        elif message == 's3':
+            print('scenario 3 invoked')
+        elif message == 's4':
+            print('scenario 4 invoked')
 
 ################ Helper Functions ################
 
@@ -93,42 +102,43 @@ def stddev(data, ddof=0):
 
 ################ Wifi Connection ################
 try:
-    if wifi.radio.ipv4_address is None:
+    if wifi.radio.ipv4_address is None and internet:
         print("connecting to wifi")
         wifi.radio.connect(os.getenv('CIRCUITPY_WIFI_SSID'),
                         os.getenv('CIRCUITPY_WIFI_PASSWORD'))
+        print(f"local address {wifi.radio.ipv4_address}")
 except Exception as e:
     print("Failed to connect to Wi-Fi: ", repr(e))
     print("Resetting microcontroller in 30 seconds")
     time.sleep(30)
     microcontroller.reset()
-print(f"local address {wifi.radio.ipv4_address}")
 
 aio_username = os.getenv('AIO_USERNAME')
 aio_key = os.getenv('AIO_KEY')
 
 ################ Initialise MQTT ################
 try:
-    pool = socketpool.SocketPool(wifi.radio)
-    mqtt_client = MQTT.MQTT(
-        broker="io.adafruit.com",
-        port=1883,
-        username=aio_username,
-        password=aio_key,
-        socket_pool=pool,
-        ssl_context=ssl.create_default_context()
-    )
-    # Initialize an Adafruit IO MQTT Client
-    io = IO_MQTT(mqtt_client)
-    # Setup callbacks here
-    io.on_connect = connected
-    io.on_disconnect = disconnected
-    io.on_subscribe = subscribe
-    io.add_feed_callback("project.scenario", on_scenario_msg)
-    io.connect()
-    print("connected to io")
-    # Setup subscribes here
-    io.subscribe("project.scenario")
+    if internet:
+        pool = socketpool.SocketPool(wifi.radio)
+        mqtt_client = MQTT.MQTT(
+            broker="io.adafruit.com",
+            port=1883,
+            username=aio_username,
+            password=aio_key,
+            socket_pool=pool,
+            ssl_context=ssl.create_default_context()
+        )
+        # Initialize an Adafruit IO MQTT Client
+        io = IO_MQTT(mqtt_client)
+        # Setup callbacks here
+        io.on_connect = connected
+        io.on_disconnect = disconnected
+        io.on_subscribe = subscribe
+        io.add_feed_callback("project.scenario", on_scenario_msg)
+        io.connect()
+        print("connected to io")
+        # Setup subscribes here
+        io.subscribe("project.scenario")
 except Exception as e:
     print("Error in network setup:\n", repr(e))
     print("Resetting microcontroller in 20 seconds")
@@ -156,14 +166,16 @@ SENSOR_LIST = [
         "PREV_TIME": -1,
         "OBJECT": tof_sensor,
         "VALUES": [],
-        "PRESENCE_VALUE": 0     # 0 for no human presence, 1 for human presence
-    },
-    {
-        "ON": 4,
-        "PREV_TIME": -1,
-        "OBJECT": io
+        "PRESENCE_VALUE": "No"
     }
 ]
+
+if internet:
+    SENSOR_LIST.append({
+        "ON": 10,
+        "PREV_TIME": -1,
+        "OBJECT": io
+    })
 
 MOTOR_LIST = [
     {
@@ -209,7 +221,8 @@ while True:
     now = time.monotonic()
     # ping adafruit MQTT. known bug that this will be blocking and cause delays, so account for it accordingly
     try:
-        io.loop()
+        if internet:
+            io.loop()
     except Exception as e:
         print('io.loop exception:', repr(e))
 
@@ -246,15 +259,23 @@ while True:
                 sensor["VALUES"].append(sensor["OBJECT"].range)
                 if len(sensor["VALUES"]) > 10:
                     sensor["VALUES"].pop(0)
-                if len(sensor["VALUES"]) > 1:
+                if len(sensor["VALUES"]) > 4:
                     # Human presence is based on whether the standard deviation exceeds 10, which is reasonable
-                    sensor["PRESENCE_VALUE"] = stddev(sensor["VALUES"]) > 10
+                    sensor["PRESENCE_VALUE"] = 'Present' if stddev(sensor["VALUES"]) > 10 else 'Not Present'
                     print('ToF Standard Deviation: {}mm'.format(stddev(sensor["VALUES"])))
             
             if type(sensor["OBJECT"]) is IO_MQTT:
                 sensor["PREV_TIME"] = now
                 # Package up all the data and send it to MQTT
-                ################# TODO SEND DATA TO MQTT HERE #################
+                try:
+                    io.publish('project.sensor-data', json.dumps({
+                        "Temperature": SENSOR_LIST[1]["TEMP_VALUE"],
+                        "Humidity": SENSOR_LIST[1]["HUMD_VALUE"],
+                        "Human Activity": SENSOR_LIST[2]["PRESENCE_VALUE"],
+                        "Luminosity": SENSOR_LIST[0]["LUX_VALUE"]
+                    }))
+                except Exception as e:
+                    print('Error sending data to IO:', repr(e))
 
     # every 2 seconds, motor on, motor off, motor reverse, motor off
     if test_motor:
@@ -291,4 +312,4 @@ while True:
     #             light["FADE_DIR"] = False
     #             # decrease brightness
             
-    # pixels.fill(rainbowio.colorwheel(supervisor.ticks_ms() // 16))
+    pixels.fill(rainbowio.colorwheel(supervisor.ticks_ms() // 16))
