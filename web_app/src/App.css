@@ -1,3 +1,19 @@
+.flash-green {
+  animation: flash 1s infinite;
+}
+
+@keyframes flash {
+  0% {
+    color: inherit; /* Original color */
+  }
+  50% {
+    color: green; /* Flash to green */
+  }
+  100% {
+    color: inherit; /* Back to original color */
+  }
+}
+
 body {
   background-position: center;
   background-repeat: no-repeat;
