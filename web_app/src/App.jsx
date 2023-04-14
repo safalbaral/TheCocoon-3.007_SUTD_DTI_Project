@@ -59,7 +59,7 @@ const SensorsScreen = ({changeActiveScreen}) => {
             </div>
               <p className={mqttRequestReceived ? 'flash-green' : ''}>Updated every 4 seconds</p>
               <div className={mqttRequestReceived ? 'flash-green' : ''}>
-                <RenderSensors sensorsData={sensorsData}/>
+                <RenderSensors sensorsData={sensorsData} mqttRequestReceived={mqttRequestReceived} />
               </div>
             <div class="row mt-4">
               <div class="col-md-12 text-center">
@@ -73,7 +73,7 @@ const SensorsScreen = ({changeActiveScreen}) => {
   )
 }
 
-const RenderSensors = ({sensorsData}) => {
+const RenderSensors = ({sensorsData, mqttRequestReceived}) => {
   console.log(sensorsData)
   return (
     <div className='row'>
@@ -82,7 +82,7 @@ const RenderSensors = ({sensorsData}) => {
         return (
           <div className='col-md-6' key={data} style={{border: '1px solid #ddd', borderRadius: '4px', padding: '10px', marginBottom: '1px', backgroundColor}}>
             <h3 style={{fontSize: '18px', fontWeight: 'bold', marginBottom: '5px'}}>{data}</h3>
-            <p style={{fontSize: '24px', color: '#444'}}><strong>{value}</strong></p>
+            <p style={{fontSize: '24px', color: '#444'}} className={mqttRequestReceived ? 'flash-green' : ''}><strong>{value}</strong></p>
           </div>
         )
       })}
