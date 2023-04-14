@@ -11,9 +11,11 @@ import RenderSimulatedWeatherData from './components/RenderSimulatedWeatherData'
 
 const SensorsScreen = ({changeActiveScreen}) => {
   const [sensorsData, setSensorsData] = useState({
-    'data': '123',
-    'other data': '456'
+    'Data not recieved yet': '123',
+    'No data recieved': '456'
   });
+
+  const [mqttRequestReceived, setMqttRequestReceived] = useState(false);
 
   useEffect(() => {
     // Subscribe to the desired MQTT topic
@@ -26,6 +28,13 @@ const SensorsScreen = ({changeActiveScreen}) => {
       // Update the state with the received message
       console.log(JSON.parse(payload.toString())) 
       setSensorsData(JSON.parse(payload.toString()));
+
+      setMqttRequestReceived(true);
+
+      // Reset mqttRequestReceived to false after 2 seconds
+      setTimeout(() => {
+        setMqttRequestReceived(false);
+      }, 2000);
     };
 
     // Attach the callback to the MQTT client
@@ -48,8 +57,10 @@ const SensorsScreen = ({changeActiveScreen}) => {
               <i class="bi bi-cpu"></i>
               <h2 class="card-title"> Sensor Data</h2>
             </div>
-              <p>Updated every 4 seconds</p>
-              <RenderSensors sensorsData={sensorsData}/>
+              <p className={mqttRequestReceived ? 'flash-green' : ''}>Updated every 4 seconds</p>
+              <div className={mqttRequestReceived ? 'flash-green' : ''}>
+                <RenderSensors sensorsData={sensorsData}/>
+              </div>
             <div class="row mt-4">
               <div class="col-md-12 text-center">
                 <button class="btn btn-secondary" onClick={changeActiveScreen}>Access Weather Panel</button>
@@ -71,7 +82,7 @@ const RenderSensors = ({sensorsData}) => {
         return (
           <div className='col-md-6' key={data} style={{border: '1px solid #ddd', borderRadius: '4px', padding: '10px', marginBottom: '1px', backgroundColor}}>
             <h3 style={{fontSize: '18px', fontWeight: 'bold', marginBottom: '5px'}}>{data}</h3>
-            <p style={{fontSize: '14px', color: '#444'}}><strong>{value}</strong></p>
+            <p style={{fontSize: '24px', color: '#444'}}><strong>{value}</strong></p>
           </div>
         )
       })}
