@@ -25,10 +25,17 @@ internet = False    # Connect to internet?
 
 ################ Initialise hardware ################
 i2c = busio.I2C(scl=board.GP13, sda=board.GP12, frequency=50000)
-light_sensor = adafruit_bh1750.BH1750(i2c)
-tof_sensor = adafruit_vl53l0x.VL53L0X(i2c)
+try:
+    light_sensor = adafruit_bh1750.BH1750(i2c)
+    tof_sensor = adafruit_vl53l0x.VL53L0X(i2c)
 
-dht_sensor = adafruit_dht.DHT11(board.GP14)
+    dht_sensor = adafruit_dht.DHT11(board.GP14)
+except Exception as e:
+    print('Critical Error initializing sensors:', repr(e))
+    print("Resetting microcontroller in 30 seconds")
+    time.sleep(30)
+    error_count = 0
+    microcontroller.reset()
 
 pwm16_motor1 = pwmio.PWMOut(board.GP16, frequency=1000)
 pwm17_motor1 = pwmio.PWMOut(board.GP17, frequency=1000)
@@ -40,7 +47,7 @@ pwm11_ledfilament = pwmio.PWMOut(board.GP11, frequency=1000)
 pwm10_ledfilament = pwmio.PWMOut(board.GP10, frequency=1000)
 
 NEOPIXEL = board.GP22
-NUM_PIXELS = 3
+NUM_PIXELS = 7
 pixels = NeoPixelBackground(NEOPIXEL, NUM_PIXELS)
 pixels.brightness = 0.5
 
@@ -172,7 +179,7 @@ SENSOR_LIST = [
 
 if internet:
     SENSOR_LIST.append({
-        "ON": 10,
+        "ON": 4,
         "PREV_TIME": -1,
         "OBJECT": io
     })
@@ -217,99 +224,113 @@ print('sleeping before activation...')
 time.sleep(5)
 print('activated!')
 
+error_count = 0
+
 while True:
-    now = time.monotonic()
-    # ping adafruit MQTT. known bug that this will be blocking and cause delays, so account for it accordingly
     try:
-        if internet:
-            io.loop()
+        now = time.monotonic()
+        # ping adafruit MQTT. known bug that this will be blocking and cause delays, so account for it accordingly
+        # try:
+        #     if internet:
+        #         io.loop()
+        # except Exception as e:
+        #     print('io.loop exception:', repr(e))
+
+        # This section reads live data from sensors and sends them
+        for sensor in SENSOR_LIST:
+            if now >= sensor["PREV_TIME"] + sensor["ON"]:
+                if type(sensor["OBJECT"]) is adafruit_bh1750.BH1750:
+                    sensor["PREV_TIME"] = now
+                    print("%.2f Lux" % sensor["OBJECT"].lux)
+                    sensor["LUX_VALUE"] = sensor["OBJECT"].lux
+
+                if type(sensor["OBJECT"]) is adafruit_dht.DHT11:
+                    sensor["PREV_TIME"] = now
+                    try:
+                        temperature_c = sensor["OBJECT"].temperature
+                        humidity = sensor["OBJECT"].humidity
+                        if type(temperature_c) is None:
+                            print('is none!!!')
+                        else:
+                            temperature_f = temperature_c * (9 / 5) + 32
+                            sensor["TEMP_VALUE"] = temperature_c
+                            sensor["HUMD_VALUE"] = humidity
+                            print("Temp: {:.1f} F / {:.1f} C    Humidity: {}% ".format(temperature_f, temperature_c, humidity))
+                    except RuntimeError as error:
+                        # Errors happen fairly often, DHT's are hard to read, just keep going
+                        print('DHT error: ', error.args[0])
+                        pass
+                    except Exception as error:
+                        print('DHT related error: ', error.args[0])
+                        pass
+                
+                if type(sensor["OBJECT"]) is adafruit_vl53l0x.VL53L0X:
+                    sensor["PREV_TIME"] = now
+                    sensor["VALUES"].append(sensor["OBJECT"].range)
+                    if len(sensor["VALUES"]) > 10:
+                        sensor["VALUES"].pop(0)
+                    if len(sensor["VALUES"]) > 4:
+                        # Human presence is based on whether the standard deviation exceeds 5, which is reasonable
+                        sensor["PRESENCE_VALUE"] = 'Present' if stddev(sensor["VALUES"]) > 5 else 'Not Present'
+                        print('ToF Standard Deviation: {}mm'.format(stddev(sensor["VALUES"])))
+                
+                if type(sensor["OBJECT"]) is IO_MQTT:
+                    sensor["PREV_TIME"] = now
+                    # Package up all the data and send it to MQTT
+                    try:
+                        io.publish('project.sensor-data', json.dumps({
+                            "Temperature": SENSOR_LIST[1]["TEMP_VALUE"],
+                            "Humidity": SENSOR_LIST[1]["HUMD_VALUE"],
+                            "Human Activity": SENSOR_LIST[2]["PRESENCE_VALUE"],
+                            "Luminosity": round(SENSOR_LIST[0]["LUX_VALUE"],2)
+                        }))
+                    except Exception as e:
+                        print('Error sending data to IO:', repr(e))
+                        print(f"Local address {wifi.radio.ipv4_address}")
+                        raise e
+
+        # every 2 seconds, motor on, motor off, motor reverse, motor off
+        if test_motor:
+            for motor in MOTOR_LIST:
+                if motor["MOTOR"].throttle == -1:
+                    if now >= motor["PREV_TIME"] + motor["ON"]:
+                        # Action to do when motor is transitioning from ON to OFF
+                        motor["PREV_TIME"] = now
+                        motor["MOTOR"].throttle = 1
+                if motor["MOTOR"].throttle == 1 or motor["MOTOR"].throttle == None:
+                    if now >= motor["PREV_TIME"] + motor["OFF"]:
+                        # Action to do when motor is transitioning from OFF to ON
+                        motor["PREV_TIME"] = now
+                        motor["MOTOR"].throttle = -1
+
+        # for light in LIGHT_LIST:
+        #     if now >= light["PREV_TIME"] + light["ON"]:
+        #         if light["FADE_DIR"] == True:
+        #             # increase brightness
+        #             light["PWM"] += 255
+        #         elif light["FADE_DIR"] == False:
+        #             # decrease brightness
+        #             light["PWM"] -= 255
+                
+        #         # apply changes
+        #         light["PIN"].duty_cycle = light["PWM"]
+        #         light["PREV_TIME"] = now
+
+        #         # change direction of fade
+        #         if light["PWM"] < 0x0002:
+        #             light["FADE_DIR"] = True
+        #             # increase brightness
+        #         elif light["PWM"] > 0xfff1:
+        #             light["FADE_DIR"] = False
+        #             # decrease brightness
+                
+        pixels.fill(rainbowio.colorwheel(supervisor.ticks_ms() // 16))
     except Exception as e:
-        print('io.loop exception:', repr(e))
-
-    # This section reads live data from sensors and sends them
-    for sensor in SENSOR_LIST:
-        if now >= sensor["PREV_TIME"] + sensor["ON"]:
-            if type(sensor["OBJECT"]) is adafruit_bh1750.BH1750:
-                sensor["PREV_TIME"] = now
-                print("%.2f Lux" % sensor["OBJECT"].lux)
-                sensor["LUX_VALUE"] = sensor["OBJECT"].lux
-
-            if type(sensor["OBJECT"]) is adafruit_dht.DHT11:
-                sensor["PREV_TIME"] = now
-                try:
-                    temperature_c = sensor["OBJECT"].temperature
-                    humidity = sensor["OBJECT"].humidity
-                    if type(temperature_c) is None:
-                        print('is none!!!')
-                    else:
-                        temperature_f = temperature_c * (9 / 5) + 32
-                        sensor["TEMP_VALUE"] = temperature_c
-                        sensor["HUMD_VALUE"] = humidity
-                        print("Temp: {:.1f} F / {:.1f} C    Humidity: {}% ".format(temperature_f, temperature_c, humidity))
-                except RuntimeError as error:
-                    # Errors happen fairly often, DHT's are hard to read, just keep going
-                    print('DHT error: ', error.args[0])
-                    pass
-                except Exception as error:
-                    print('DHT related error: ', error.args[0])
-                    pass
-            
-            if type(sensor["OBJECT"]) is adafruit_vl53l0x.VL53L0X:
-                sensor["PREV_TIME"] = now
-                sensor["VALUES"].append(sensor["OBJECT"].range)
-                if len(sensor["VALUES"]) > 10:
-                    sensor["VALUES"].pop(0)
-                if len(sensor["VALUES"]) > 4:
-                    # Human presence is based on whether the standard deviation exceeds 10, which is reasonable
-                    sensor["PRESENCE_VALUE"] = 'Present' if stddev(sensor["VALUES"]) > 10 else 'Not Present'
-                    print('ToF Standard Deviation: {}mm'.format(stddev(sensor["VALUES"])))
-            
-            if type(sensor["OBJECT"]) is IO_MQTT:
-                sensor["PREV_TIME"] = now
-                # Package up all the data and send it to MQTT
-                try:
-                    io.publish('project.sensor-data', json.dumps({
-                        "Temperature": SENSOR_LIST[1]["TEMP_VALUE"],
-                        "Humidity": SENSOR_LIST[1]["HUMD_VALUE"],
-                        "Human Activity": SENSOR_LIST[2]["PRESENCE_VALUE"],
-                        "Luminosity": SENSOR_LIST[0]["LUX_VALUE"]
-                    }))
-                except Exception as e:
-                    print('Error sending data to IO:', repr(e))
-
-    # every 2 seconds, motor on, motor off, motor reverse, motor off
-    if test_motor:
-        for motor in MOTOR_LIST:
-            if motor["MOTOR"].throttle == -1:
-                if now >= motor["PREV_TIME"] + motor["ON"]:
-                    # Action to do when motor is transitioning from ON to OFF
-                    motor["PREV_TIME"] = now
-                    motor["MOTOR"].throttle = 1
-            if motor["MOTOR"].throttle == 1 or motor["MOTOR"].throttle == None:
-                if now >= motor["PREV_TIME"] + motor["OFF"]:
-                    # Action to do when motor is transitioning from OFF to ON
-                    motor["PREV_TIME"] = now
-                    motor["MOTOR"].throttle = -1
-
-    # for light in LIGHT_LIST:
-    #     if now >= light["PREV_TIME"] + light["ON"]:
-    #         if light["FADE_DIR"] == True:
-    #             # increase brightness
-    #             light["PWM"] += 255
-    #         elif light["FADE_DIR"] == False:
-    #             # decrease brightness
-    #             light["PWM"] -= 255
-            
-    #         # apply changes
-    #         light["PIN"].duty_cycle = light["PWM"]
-    #         light["PREV_TIME"] = now
-
-    #         # change direction of fade
-    #         if light["PWM"] < 0x0002:
-    #             light["FADE_DIR"] = True
-    #             # increase brightness
-    #         elif light["PWM"] > 0xfff1:
-    #             light["FADE_DIR"] = False
-    #             # decrease brightness
-            
-    pixels.fill(rainbowio.colorwheel(supervisor.ticks_ms() // 16))
+        print('General Error Detected:', repr(e))
+        error_count += 1
+        print('Error Count:', error_count)
+        if error_count > 5:
+            print("Resetting microcontroller in 10 seconds")
+            time.sleep(20)
+            error_count = 0
+            microcontroller.reset()
