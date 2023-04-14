@@ -109,7 +109,9 @@ const MainScreen = ({changeActiveScreen}) => {
     if (!isButtonDisabled) {
       setIsButtonDisabled(true); // Disable the button
 
-      const nextWeatherIndex = selectedOption;
+      // The below code needed to set selectedOption to 0 if no option is selected by the user yet and to not cause an exception 
+      // if the user just clicks simulate weather on directly after component load.
+      const nextWeatherIndex = selectedOption === '' ? 0 : selectedOption;
 
       setWeatherIndex(nextWeatherIndex);
 
@@ -141,7 +143,7 @@ const MainScreen = ({changeActiveScreen}) => {
                   <option value={selectedOption}>Select a weather condition</option>
                   { weatherStates.map((weatherState) => {
                     return(
-                      <option value={weatherState.id} disabled={Number(selectedOption) === Number(weatherState.id) ? true : false}>{weatherState.weather}</option>
+                      <option key={weatherState.id} value={weatherState.id} disabled={Number(selectedOption) === Number(weatherState.id) ? true : false}>{weatherState.weather}</option>
                     )
                   }) }
                 </select>
