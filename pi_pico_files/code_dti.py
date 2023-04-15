@@ -18,6 +18,30 @@ from pioasm_neopixel_bg import NeoPixelBackground
 import rainbowio
 import supervisor
 
+import neopixel
+
+from adafruit_led_animation.animation.solid import Solid
+from adafruit_led_animation.animation.colorcycle import ColorCycle
+from adafruit_led_animation.animation.blink import Blink
+from adafruit_led_animation.animation.comet import Comet
+from adafruit_led_animation.animation.chase import Chase
+from adafruit_led_animation.animation.pulse import Pulse
+from adafruit_led_animation.animation.sparklepulse import SparklePulse
+from adafruit_led_animation.animation.sparkle import Sparkle
+from adafruit_led_animation.sequence import AnimationSequence
+from adafruit_led_animation.color import (
+    PURPLE,
+    WHITE,
+    AMBER,
+    JADE,
+    TEAL,
+    AQUA,
+    MAGENTA,
+    ORANGE,
+    YELLOW,
+    GREEN,
+)
+
 ################ Constants for program settings ################
 test_motor = False  # Power Motor up?
 internet = False    # Connect to internet?
@@ -25,9 +49,18 @@ internet = False    # Connect to internet?
 
 ################ Initialise hardware ################
 i2c = busio.I2C(scl=board.GP13, sda=board.GP12, frequency=50000)
+
 try:
-    light_sensor = adafruit_bh1750.BH1750(i2c)
+    while not i2c.try_lock():
+        pass
+    print(
+        "I2C addresses found:",
+        [hex(device_address) for device_address in i2c.scan()],
+    )
+    i2c.unlock()
+
     tof_sensor = adafruit_vl53l0x.VL53L0X(i2c)
+    light_sensor = adafruit_bh1750.BH1750(i2c)
 
     dht_sensor = adafruit_dht.DHT11(board.GP14)
 except Exception as e:
@@ -46,11 +79,26 @@ pwm15_ledfilament = pwmio.PWMOut(board.GP15, frequency=1000)
 pwm11_ledfilament = pwmio.PWMOut(board.GP11, frequency=1000)
 pwm10_ledfilament = pwmio.PWMOut(board.GP10, frequency=1000)
 
-NEOPIXEL = board.GP22
-NUM_PIXELS = 7
-pixels = NeoPixelBackground(NEOPIXEL, NUM_PIXELS)
-pixels.brightness = 0.5
+# Neopixel init
+pavilion_pixels = neopixel.NeoPixel(board.GP22, 7, brightness=0.5, auto_write=False)
 
+comet = Comet(pavilion_pixels, speed=0.01, color=PURPLE, tail_length=10, bounce=True)
+pulse_white = Pulse(pavilion_pixels, speed=0.05, color=YELLOW, period=5)
+pulse_green = Pulse(pavilion_pixels, speed=0.05, color=ORANGE, period=5)
+sparkle_lightblue = SparklePulse(pavilion_pixels, speed=0.05, color=AQUA, period=5, max_intensity=0.3, min_intensity=0.1)
+# sparkle_lightblue = Sparkle(pavilion_pixels, speed=0.2, color=AQUA, num_sparkles=5)
+pavilion_rain_anim = AnimationSequence(
+    pulse_white,
+    pulse_green,
+    advance_interval=5,
+    auto_clear=False,
+)
+
+pavilion_night_anim = AnimationSequence(
+    sparkle_lightblue,
+    advance_interval=5,
+    auto_clear=False,
+)
 
 ################ MQTT Callbacks ################
 # pylint: disable=unused-argument
@@ -228,6 +276,7 @@ error_count = 0
 
 while True:
     try:
+        pavilion_night_anim.animate()
         now = time.monotonic()
         # ping adafruit MQTT. known bug that this will be blocking and cause delays, so account for it accordingly
         # try:
@@ -323,8 +372,6 @@ while True:
         #         elif light["PWM"] > 0xfff1:
         #             light["FADE_DIR"] = False
         #             # decrease brightness
-                
-        pixels.fill(rainbowio.colorwheel(supervisor.ticks_ms() // 16))
     except Exception as e:
         print('General Error Detected:', repr(e))
         error_count += 1
