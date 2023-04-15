@@ -85,8 +85,16 @@ pavilion_pixels = neopixel.NeoPixel(board.GP22, 7, brightness=0.5, auto_write=Fa
 comet = Comet(pavilion_pixels, speed=0.01, color=PURPLE, tail_length=10, bounce=True)
 pulse_white = Pulse(pavilion_pixels, speed=0.05, color=YELLOW, period=5)
 pulse_green = Pulse(pavilion_pixels, speed=0.05, color=ORANGE, period=5)
+pulse_jade = Pulse(pavilion_pixels, speed=0.05, color=JADE, period=5)
 sparkle_lightblue = SparklePulse(pavilion_pixels, speed=0.05, color=AQUA, period=5, max_intensity=0.3, min_intensity=0.1)
 # sparkle_lightblue = Sparkle(pavilion_pixels, speed=0.2, color=AQUA, num_sparkles=5)
+
+pavilion_day_anim = AnimationSequence(
+    pulse_jade,
+    advance_interval=5,
+    auto_clear=False,
+)
+
 pavilion_rain_anim = AnimationSequence(
     pulse_white,
     pulse_green,
@@ -276,7 +284,7 @@ error_count = 0
 
 while True:
     try:
-        pavilion_night_anim.animate()
+        pavilion_day_anim.animate()
         now = time.monotonic()
         # ping adafruit MQTT. known bug that this will be blocking and cause delays, so account for it accordingly
         # try:
@@ -352,26 +360,27 @@ while True:
                         motor["PREV_TIME"] = now
                         motor["MOTOR"].throttle = -1
 
-        # for light in LIGHT_LIST:
-        #     if now >= light["PREV_TIME"] + light["ON"]:
-        #         if light["FADE_DIR"] == True:
-        #             # increase brightness
-        #             light["PWM"] += 255
-        #         elif light["FADE_DIR"] == False:
-        #             # decrease brightness
-        #             light["PWM"] -= 255
+        for light in LIGHT_LIST:
+            if now >= light["PREV_TIME"] + light["ON"]:
+                if light["FADE_DIR"] == True:
+                    # increase brightness
+                    light["PWM"] += 255
+                elif light["FADE_DIR"] == False:
+                    # decrease brightness
+                    light["PWM"] -= 255
                 
-        #         # apply changes
-        #         light["PIN"].duty_cycle = light["PWM"]
-        #         light["PREV_TIME"] = now
+                # apply changes
+                light["PIN"].duty_cycle = light["PWM"]
+                light["PREV_TIME"] = now
 
-        #         # change direction of fade
-        #         if light["PWM"] < 0x0002:
-        #             light["FADE_DIR"] = True
-        #             # increase brightness
-        #         elif light["PWM"] > 0xfff1:
-        #             light["FADE_DIR"] = False
-        #             # decrease brightness
+                # change direction of fade
+                if light["PWM"] < 0x0002:
+                    light["FADE_DIR"] = True
+                    # increase brightness
+                elif light["PWM"] > 0xfff1:
+                    light["FADE_DIR"] = False
+                    # decrease brightness
+    
     except Exception as e:
         print('General Error Detected:', repr(e))
         error_count += 1
