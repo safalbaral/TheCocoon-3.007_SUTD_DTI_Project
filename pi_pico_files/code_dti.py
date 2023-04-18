@@ -75,7 +75,12 @@ pwm17_motor1 = pwmio.PWMOut(board.GP17, frequency=1000)
 motor_1 = motor.DCMotor(pwm16_motor1, pwm17_motor1)
 motor_1.decay_mode = (motor.SLOW_DECAY)
 
-pwm15_ledfilament = pwmio.PWMOut(board.GP15, frequency=1000)
+# Trees
+pwm7_ledfilament = pwmio.PWMOut(board.GP7, frequency=1000)
+pwm8_ledfilament = pwmio.PWMOut(board.GP8, frequency=1000)
+pwm9_ledfilament = pwmio.PWMOut(board.GP9, frequency=1000)
+
+# Pavilion
 pwm11_ledfilament = pwmio.PWMOut(board.GP11, frequency=1000)
 pwm10_ledfilament = pwmio.PWMOut(board.GP10, frequency=1000)
 
@@ -270,7 +275,23 @@ LIGHT_LIST = [
         "ON": 0.01,
         "OFF": 5,
         "PREV_TIME": -1,
-        "PIN": pwm15_ledfilament,
+        "PIN": pwm9_ledfilament,
+        "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
+        "FADE_DIR": True
+    },
+    {
+        "ON": 0.01,
+        "OFF": 5,
+        "PREV_TIME": -1,
+        "PIN": pwm8_ledfilament,
+        "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
+        "FADE_DIR": True
+    },
+    {
+        "ON": 0.01,
+        "OFF": 5,
+        "PREV_TIME": -1,
+        "PIN": pwm7_ledfilament,
         "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
         "FADE_DIR": True
     }
