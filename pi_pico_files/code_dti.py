@@ -32,7 +32,6 @@ from adafruit_led_animation.sequence import AnimationSequence
 from adafruit_led_animation.color import (
     PURPLE,
     WHITE,
-    AMBER,
     JADE,
     TEAL,
     AQUA,
@@ -41,6 +40,7 @@ from adafruit_led_animation.color import (
     YELLOW,
     GREEN,
     RED,
+    AMBER,
 )
 
 ################ Constants for program settings ################
@@ -91,14 +91,14 @@ pwm10_ledfilament = pwmio.PWMOut(board.GP10, frequency=1000)
 pavilion_pixels = neopixel.NeoPixel(board.GP22, 7, brightness=0.5, auto_write=False)
 
 comet = Comet(pavilion_pixels, speed=0.01, color=PURPLE, tail_length=10, bounce=True)
-pulse_white = Pulse(pavilion_pixels, speed=0.05, color=YELLOW, period=5)
-pulse_green = Pulse(pavilion_pixels, speed=0.05, color=ORANGE, period=5)
+pulse_yellow = Pulse(pavilion_pixels, speed=0.05, color=YELLOW, period=5)
+pulse_amber = Pulse(pavilion_pixels, speed=0.05, color=(255, 130, 0), period=5)
 pulse_jade = Pulse(pavilion_pixels, speed=0.05, color=JADE, period=5)
 sparkle_lightblue = SparklePulse(pavilion_pixels, speed=0.05, color=AQUA, period=5, max_intensity=0.3, min_intensity=0.1)
 # sparkle_lightblue = Sparkle(pavilion_pixels, speed=0.2, color=AQUA, num_sparkles=5)
 
 smokebox_pixels = neopixel.NeoPixel(board.GP6, 3, brightness=0.5, auto_write=False)
-pulse_green_2 = Pulse(smokebox_pixels, speed=0.05, color=GREEN, period=5)
+pulse_jade_2 = Pulse(smokebox_pixels, speed=0.05, color=JADE, period=5)
 pulse_red_2 = Pulse(smokebox_pixels, speed=0.05, color=RED, period=5)
 
 pavilion_day_anim = AnimationSequence(
@@ -108,8 +108,8 @@ pavilion_day_anim = AnimationSequence(
 )
 
 pavilion_rain_anim = AnimationSequence(
-    pulse_white,
-    pulse_green,
+    pulse_yellow,
+    pulse_amber,
     advance_interval=5,
     auto_clear=False,
 )
@@ -121,8 +121,10 @@ pavilion_night_anim = AnimationSequence(
 )
 
 smokebox_anim = AnimationSequence(
-    pulse_green_2,
+    pulse_jade_2,
     pulse_red_2,
+    advance_interval=5,
+    auto_clear=False,
 )
 
 ################ MQTT Callbacks ################
@@ -324,7 +326,8 @@ lux_data = []
 
 while True:
     try:
-        pavilion_day_anim.animate()
+        # pavilion_day_anim.animate()
+        pavilion_rain_anim.animate()
         smokebox_anim.animate()
         now = time.monotonic()
         # ping adafruit MQTT. known bug that this will be blocking and cause delays, so account for it accordingly
@@ -335,8 +338,8 @@ while True:
         #     print('io.loop exception:', repr(e))
 
         # Perform computation for lux sensing and adjust brightness
-        lux_data.append(SENSOR_LIST[0]["OBJECT"].lux)
-        if len(lux_data) > 10:
+        lux_data.append(int(SENSOR_LIST[0]["OBJECT"].lux))
+        if len(lux_data) > 100:
             lux_data.pop(0)
             # max lux is around 300, min lux is 0
             brightness_multiplier = -0.0023 * mean(lux_data) + 0.7
@@ -423,7 +426,7 @@ while True:
                 light["PREV_TIME"] = now
 
                 # change direction of fade
-                if light["PWM"] < 0x0400:
+                if light["PWM"] < 0x0f00:
                     light["FADE_DIR"] = True
                     # increase brightness
                 elif light["PWM"] > 0xfff1:
