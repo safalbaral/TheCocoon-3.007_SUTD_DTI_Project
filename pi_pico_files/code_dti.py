@@ -40,12 +40,15 @@ from adafruit_led_animation.color import (
     ORANGE,
     YELLOW,
     GREEN,
+    RED,
 )
 
 ################ Constants for program settings ################
 test_motor = False  # Power Motor up?
 internet = False    # Connect to internet?
 
+################ Important environment variables ################
+brightness_multiplier = 0 # This ranges from 0.0 to 1.0
 
 ################ Initialise hardware ################
 i2c = busio.I2C(scl=board.GP13, sda=board.GP12, frequency=50000)
@@ -94,6 +97,10 @@ pulse_jade = Pulse(pavilion_pixels, speed=0.05, color=JADE, period=5)
 sparkle_lightblue = SparklePulse(pavilion_pixels, speed=0.05, color=AQUA, period=5, max_intensity=0.3, min_intensity=0.1)
 # sparkle_lightblue = Sparkle(pavilion_pixels, speed=0.2, color=AQUA, num_sparkles=5)
 
+smokebox_pixels = neopixel.NeoPixel(board.GP6, 3, brightness=0.5, auto_write=False)
+pulse_green_2 = Pulse(smokebox_pixels, speed=0.05, color=GREEN, period=5)
+pulse_red_2 = Pulse(smokebox_pixels, speed=0.05, color=RED, period=5)
+
 pavilion_day_anim = AnimationSequence(
     pulse_jade,
     advance_interval=5,
@@ -111,6 +118,11 @@ pavilion_night_anim = AnimationSequence(
     sparkle_lightblue,
     advance_interval=5,
     auto_clear=False,
+)
+
+smokebox_anim = AnimationSequence(
+    pulse_green_2,
+    pulse_red_2,
 )
 
 ################ MQTT Callbacks ################
@@ -167,6 +179,9 @@ def stddev(data, ddof=0):
     ss = _ss(data)
     pvar = ss/(n-ddof)
     return pvar**0.5
+
+def mean(values):
+    return sum(values) / len(values)
 
 ################ Wifi Connection ################
 try:
@@ -303,9 +318,14 @@ print('activated!')
 
 error_count = 0
 
+
+# Data collection for luminosity
+lux_data = []
+
 while True:
     try:
         pavilion_day_anim.animate()
+        smokebox_anim.animate()
         now = time.monotonic()
         # ping adafruit MQTT. known bug that this will be blocking and cause delays, so account for it accordingly
         # try:
@@ -313,6 +333,14 @@ while True:
         #         io.loop()
         # except Exception as e:
         #     print('io.loop exception:', repr(e))
+
+        # Perform computation for lux sensing and adjust brightness
+        lux_data.append(SENSOR_LIST[0]["OBJECT"].lux)
+        if len(lux_data) > 10:
+            lux_data.pop(0)
+            # max lux is around 300, min lux is 0
+            brightness_multiplier = -0.0023 * mean(lux_data) + 0.7
+            pavilion_pixels.brightness = brightness_multiplier
 
         # This section reads live data from sensors and sends them
         for sensor in SENSOR_LIST:
@@ -348,8 +376,8 @@ while True:
                     if len(sensor["VALUES"]) > 10:
                         sensor["VALUES"].pop(0)
                     if len(sensor["VALUES"]) > 4:
-                        # Human presence is based on whether the standard deviation exceeds 5, which is reasonable
-                        sensor["PRESENCE_VALUE"] = 'Present' if stddev(sensor["VALUES"]) > 5 else 'Not Present'
+                        # Human presence is based on whether the standard deviation exceeds 2, which is for inside the pavilion
+                        sensor["PRESENCE_VALUE"] = 'Present' if stddev(sensor["VALUES"]) > 2 else 'Not Present'
                         print('ToF Standard Deviation: {}mm'.format(stddev(sensor["VALUES"])))
                 
                 if type(sensor["OBJECT"]) is IO_MQTT:
@@ -390,12 +418,12 @@ while True:
                     # decrease brightness
                     light["PWM"] -= 255
                 
-                # apply changes
-                light["PIN"].duty_cycle = light["PWM"]
+                # apply changes with luminosity in mind
+                light["PIN"].duty_cycle = int(light["PWM"] * brightness_multiplier)
                 light["PREV_TIME"] = now
 
                 # change direction of fade
-                if light["PWM"] < 0x0002:
+                if light["PWM"] < 0x0400:
                     light["FADE_DIR"] = True
                     # increase brightness
                 elif light["PWM"] > 0xfff1:
