@@ -117,7 +117,7 @@ const MainScreen = ({changeActiveScreen}) => {
 
       document.body.style.backgroundImage = `url(${weatherStates[nextWeatherIndex].background_image})`;
 
-      mqttClient.publish('neelonoon/feeds/project.scenario', `${weatherStates[weatherIndex].scenario}`, () => {
+      mqttClient.publish('neelonoon/feeds/project.scenario', `${weatherStates[nextWeatherIndex].scenario}`, () => {
         console.log('Published scenario information to mqtt server.')
       })
 
