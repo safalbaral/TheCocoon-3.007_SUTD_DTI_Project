@@ -28,6 +28,7 @@ from adafruit_led_animation.animation.chase import Chase
 from adafruit_led_animation.animation.pulse import Pulse
 from adafruit_led_animation.animation.sparklepulse import SparklePulse
 from adafruit_led_animation.animation.sparkle import Sparkle
+from adafruit_led_animation.animation.rainbowsparkle import RainbowSparkle
 from adafruit_led_animation.sequence import AnimationSequence
 from adafruit_led_animation.color import (
     PURPLE,
@@ -45,10 +46,11 @@ from adafruit_led_animation.color import (
 
 ################ Constants for program settings ################
 test_motor = False  # Power Motor up?
-internet = False    # Connect to internet?
+internet = True    # Connect to internet?
 
 ################ Important environment variables ################
 brightness_multiplier = 0 # This ranges from 0.0 to 1.0
+scenario_number = 1
 
 ################ Initialise hardware ################
 i2c = busio.I2C(scl=board.GP13, sda=board.GP12, frequency=50000)
@@ -90,12 +92,13 @@ pwm10_ledfilament = pwmio.PWMOut(board.GP10, frequency=1000)
 # Neopixel init
 pavilion_pixels = neopixel.NeoPixel(board.GP22, 7, brightness=0.5, auto_write=False)
 
-comet = Comet(pavilion_pixels, speed=0.01, color=PURPLE, tail_length=10, bounce=True)
+comet = Comet(pavilion_pixels, speed=0.1, color=YELLOW, tail_length=10, bounce=True)
 pulse_yellow = Pulse(pavilion_pixels, speed=0.05, color=YELLOW, period=5)
 pulse_amber = Pulse(pavilion_pixels, speed=0.05, color=(255, 130, 0), period=5)
+sparkle_amber = Sparkle(pavilion_pixels, speed=0.1, color=AMBER, num_sparkles=1)
 pulse_jade = Pulse(pavilion_pixels, speed=0.05, color=JADE, period=5)
 sparkle_lightblue = SparklePulse(pavilion_pixels, speed=0.05, color=AQUA, period=5, max_intensity=0.3, min_intensity=0.1)
-# sparkle_lightblue = Sparkle(pavilion_pixels, speed=0.2, color=AQUA, num_sparkles=5)
+rainbow_sparkle = RainbowSparkle(pavilion_pixels, speed=0.05, num_sparkles=2)
 
 smokebox_pixels = neopixel.NeoPixel(board.GP6, 3, brightness=0.5, auto_write=False)
 pulse_jade_2 = Pulse(smokebox_pixels, speed=0.05, color=JADE, period=5)
@@ -116,6 +119,12 @@ pavilion_rain_anim = AnimationSequence(
 
 pavilion_night_anim = AnimationSequence(
     sparkle_lightblue,
+    advance_interval=5,
+    auto_clear=False,
+)
+
+pavilion_rave_anim = AnimationSequence(
+    rainbow_sparkle,
     advance_interval=5,
     auto_clear=False,
 )
@@ -143,18 +152,27 @@ def disconnected(client):
     print("Disconnected from Adafruit IO!")
 
 def on_scenario_msg(client, topic, message):
+    global scenario_number
     # Method called whenever project.scenario has a new value
     #print("New message on topic {0}: {1} ".format(topic, message))
     # one scenario will last forever until it has been turned off
+    print("message rx: ", topic, ",", message)
     if topic == 'neelonoon/f/project.scenario':
         if message == 's1':
-            print('scenario 1 invoked')
+            print('scenario 1 invoked') # fair day
+            scenario_number = 1
         elif message == 's2':
-            print('scenario 2 invoked')
+            print('scenario 2 invoked') # scorching sun
+            scenario_number = 2
         elif message == 's3':
-            print('scenario 3 invoked')
+            print('scenario 3 invoked') # rain
+            scenario_number = 3
         elif message == 's4':
-            print('scenario 4 invoked')
+            print('scenario 4 invoked') # night
+            scenario_number = 4
+        elif message == 's5':
+            print('scenario 5 invoked') # secret mode
+            scenario_number = 5
 
 ################ Helper Functions ################
 
@@ -275,23 +293,15 @@ LIGHT_LIST = [
     {
         "ON": 0.01,
         "OFF": 5,
-        "PREV_TIME": -1,
-        "PIN": pwm11_ledfilament,
+        "PREV_TIME": 10,
+        "PIN": pwm7_ledfilament,
         "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
         "FADE_DIR": True
     },
     {
         "ON": 0.01,
         "OFF": 5,
-        "PREV_TIME": -1,
-        "PIN": pwm10_ledfilament,
-        "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
-        "FADE_DIR": True
-    },
-    {
-        "ON": 0.01,
-        "OFF": 5,
-        "PREV_TIME": -1,
+        "PREV_TIME": 0,
         "PIN": pwm9_ledfilament,
         "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
         "FADE_DIR": True
@@ -299,7 +309,7 @@ LIGHT_LIST = [
     {
         "ON": 0.01,
         "OFF": 5,
-        "PREV_TIME": -1,
+        "PREV_TIME": 0,
         "PIN": pwm8_ledfilament,
         "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
         "FADE_DIR": True
@@ -307,8 +317,16 @@ LIGHT_LIST = [
     {
         "ON": 0.01,
         "OFF": 5,
-        "PREV_TIME": -1,
-        "PIN": pwm7_ledfilament,
+        "PREV_TIME": 0,
+        "PIN": pwm10_ledfilament,
+        "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
+        "FADE_DIR": True
+    },
+    {
+        "ON": 0.01,
+        "OFF": 5,
+        "PREV_TIME": 0,
+        "PIN": pwm11_ledfilament,
         "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
         "FADE_DIR": True
     }
@@ -318,16 +336,33 @@ print('sleeping before activation...')
 time.sleep(5)
 print('activated!')
 
-error_count = 0
+# Reset time.monotonic for lights so they glow in sequence
+now = time.monotonic()
+delay = 0.5
+for i, light in enumerate(LIGHT_LIST):
+    light['PREV_TIME'] = now + (delay * (i + 1))
 
+
+error_count = 0
 
 # Data collection for luminosity
 lux_data = []
 
 while True:
     try:
-        # pavilion_day_anim.animate()
-        pavilion_rain_anim.animate()
+        if scenario_number == 1:
+            # nice morning
+            pavilion_day_anim.animate()
+        elif scenario_number == 2:
+            # scorching sun
+            pass
+        elif scenario_number == 3:
+            # rain
+            pavilion_rain_anim.animate()
+        elif scenario_number == 4:
+            # night
+            pavilion_night_anim.animate()
+        
         smokebox_anim.animate()
         now = time.monotonic()
         # ping adafruit MQTT. known bug that this will be blocking and cause delays, so account for it accordingly
@@ -341,8 +376,8 @@ while True:
         lux_data.append(int(SENSOR_LIST[0]["OBJECT"].lux))
         if len(lux_data) > 100:
             lux_data.pop(0)
-            # max lux is around 300, min lux is 0
-            brightness_multiplier = -0.0023 * mean(lux_data) + 0.7
+            # max lux is around x=500 & y=0, min lux is x=0 & y=1, 
+            brightness_multiplier = -0.002 * mean(lux_data) + 1
             pavilion_pixels.brightness = brightness_multiplier
 
         # This section reads live data from sensors and sends them
@@ -421,8 +456,15 @@ while True:
                     # decrease brightness
                     light["PWM"] -= 255
                 
-                # apply changes with luminosity in mind
-                light["PIN"].duty_cycle = int(light["PWM"] * brightness_multiplier)
+                # apply changes with luminosity in mind, bound duty_cycle
+                duty_cycle = int(light["PWM"] * brightness_multiplier)
+                if duty_cycle > 65535 or duty_cycle < 0:
+                    print("duty cycle out of bounds:", mean(lux_data))
+                if duty_cycle < 0:
+                    duty_cycle = 0
+                if duty_cycle > 65535:
+                    duty_cycle = 65535
+                light["PIN"].duty_cycle = duty_cycle
                 light["PREV_TIME"] = now
 
                 # change direction of fade
