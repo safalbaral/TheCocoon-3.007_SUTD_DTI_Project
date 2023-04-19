@@ -8,23 +8,17 @@ import os
 import ssl
 import wifi
 import socketpool
-from adafruit_io.adafruit_io import IO_MQTT
-import adafruit_minimqtt.adafruit_minimqtt as MQTT
+from adafruit_io.adafruit_io import IO_HTTP
 import adafruit_dht
 import adafruit_bh1750
 import adafruit_vl53l0x
 from adafruit_motor import motor
+import adafruit_requests
 
 import neopixel
 
-from adafruit_led_animation.animation.solid import Solid
-from adafruit_led_animation.animation.colorcycle import ColorCycle
-from adafruit_led_animation.animation.blink import Blink
-from adafruit_led_animation.animation.comet import Comet
-from adafruit_led_animation.animation.chase import Chase
 from adafruit_led_animation.animation.pulse import Pulse
 from adafruit_led_animation.animation.sparklepulse import SparklePulse
-from adafruit_led_animation.animation.sparkle import Sparkle
 from adafruit_led_animation.animation.rainbowsparkle import RainbowSparkle
 from adafruit_led_animation.sequence import AnimationSequence
 from adafruit_led_animation.color import (
@@ -48,6 +42,46 @@ internet = True    # Connect to internet?
 ################ Important environment variables ################
 brightness_multiplier = 0 # This ranges from 0.0 to 1.0
 scenario_number = 1
+
+
+
+################ Wifi Connection ################
+try:
+    if wifi.radio.ipv4_address is None and internet:
+        print("connecting to wifi")
+        wifi.radio.connect(os.getenv('CIRCUITPY_WIFI_SSID'),
+                        os.getenv('CIRCUITPY_WIFI_PASSWORD'))
+        print(f"local address {wifi.radio.ipv4_address}")
+except Exception as e:
+    print("Failed to connect to Wi-Fi: ", repr(e))
+    print("Resetting microcontroller in 30 seconds")
+    time.sleep(30)
+    microcontroller.reset()
+
+aio_username = os.getenv('AIO_USERNAME')
+aio_key = os.getenv('AIO_KEY')
+
+################ Initialise MQTT ################
+try:
+    if internet:
+        pool = socketpool.SocketPool(wifi.radio)
+        requests = adafruit_requests.Session(pool, ssl.create_default_context())
+        # Initialize an Adafruit IO HTTP API object
+        io = IO_HTTP(aio_username, aio_key, requests)
+        print("connected to io")
+
+        
+except Exception as e:
+    print("Error in network setup:\n", repr(e))
+    print("Resetting microcontroller in 20 seconds")
+    time.sleep(20)
+    microcontroller.reset()
+
+# Get feeds
+sensor_feed = io.get_feed("project.sensor-data")
+scenario_feed = io.get_feed("project.scenario")
+
+
 
 ################ Initialise hardware ################
 i2c = busio.I2C(scl=board.GP13, sda=board.GP12, frequency=50000)
@@ -89,23 +123,15 @@ pwm10_ledfilament = pwmio.PWMOut(board.GP10, frequency=1000)
 # Neopixel init
 pavilion_pixels = neopixel.NeoPixel(board.GP22, 7, brightness=0.5, auto_write=False)
 
-comet = Comet(pavilion_pixels, speed=0.1, color=YELLOW, tail_length=10, bounce=True)
 pulse_yellow = Pulse(pavilion_pixels, speed=0.05, color=YELLOW, period=5)
 pulse_amber = Pulse(pavilion_pixels, speed=0.05, color=(255, 130, 0), period=5)
-sparkle_amber = Sparkle(pavilion_pixels, speed=0.1, color=AMBER, num_sparkles=1)
-pulse_jade = Pulse(pavilion_pixels, speed=0.05, color=JADE, period=5)
+# pulse_jade = Pulse(pavilion_pixels, speed=0.05, color=JADE, period=5)
 sparkle_lightblue = SparklePulse(pavilion_pixels, speed=0.05, color=AQUA, period=5, max_intensity=0.3, min_intensity=0.1)
 rainbow_sparkle = RainbowSparkle(pavilion_pixels, speed=0.05, num_sparkles=2)
 
 smokebox_pixels = neopixel.NeoPixel(board.GP6, 3, brightness=0.5, auto_write=False)
 pulse_jade_2 = Pulse(smokebox_pixels, speed=0.05, color=JADE, period=5)
 pulse_red_2 = Pulse(smokebox_pixels, speed=0.05, color=RED, period=5)
-
-pavilion_day_anim = AnimationSequence(
-    pulse_jade,
-    advance_interval=5,
-    auto_clear=False,
-)
 
 pavilion_rain_anim = AnimationSequence(
     pulse_yellow,
@@ -135,41 +161,41 @@ smokebox_anim = AnimationSequence(
 
 ################ MQTT Callbacks ################
 # pylint: disable=unused-argument
-def connected(client):
-    # Connected function will be called when the client is connected to Adafruit IO.
-    print("Connected to Adafruit IO! ")
+# def connected(client):
+#     # Connected function will be called when the client is connected to Adafruit IO.
+#     print("Connected to Adafruit IO! ")
 
-def subscribe(client, userdata, topic, granted_qos):
-    # This method is called when the client subscribes to a new feed.
-    print("Subscribed to {0} with QOS level {1}".format(topic, granted_qos))
+# def subscribe(client, userdata, topic, granted_qos):
+#     # This method is called when the client subscribes to a new feed.
+#     print("Subscribed to {0} with QOS level {1}".format(topic, granted_qos))
 
-# pylint: disable=unused-argument
-def disconnected(client):
-    # Disconnected function will be called when the client disconnects.
-    print("Disconnected from Adafruit IO!")
+# # pylint: disable=unused-argument
+# def disconnected(client):
+#     # Disconnected function will be called when the client disconnects.
+#     print("Disconnected from Adafruit IO!")
 
-def on_scenario_msg(client, topic, message):
-    global scenario_number
-    # Method called whenever project.scenario has a new value
-    #print("New message on topic {0}: {1} ".format(topic, message))
-    # one scenario will last forever until it has been turned off
-    print("message rx: ", topic, ",", message)
-    if topic == 'neelonoon/f/project.scenario':
-        if message == 's1':
-            print('scenario 1 invoked') # fair day
-            scenario_number = 1
-        elif message == 's2':
-            print('scenario 2 invoked') # scorching sun
-            scenario_number = 2
-        elif message == 's3':
-            print('scenario 3 invoked') # rain
-            scenario_number = 3
-        elif message == 's4':
-            print('scenario 4 invoked') # night
-            scenario_number = 4
-        elif message == 's5':
-            print('scenario 5 invoked') # secret mode
-            scenario_number = 5
+# def on_scenario_msg(client, topic, message):
+#     global scenario_number
+#     # Method called whenever project.scenario has a new value
+#     #print("New message on topic {0}: {1} ".format(topic, message))
+#     # one scenario will last forever until it has been turned off
+#     print("message rx: ", topic, ",", message)
+#     if topic == 'neelonoon/f/project.scenario':
+#         if message == 's1':
+#             print('scenario 1 invoked') # fair day
+#             scenario_number = 1
+#         elif message == 's2':
+#             print('scenario 2 invoked') # scorching sun
+#             scenario_number = 2
+#         elif message == 's3':
+#             print('scenario 3 invoked') # rain
+#             scenario_number = 3
+#         elif message == 's4':
+#             print('scenario 4 invoked') # night
+#             scenario_number = 4
+#         elif message == 's5':
+#             print('scenario 5 invoked') # secret mode
+#             scenario_number = 5
 
 ################ Helper Functions ################
 
@@ -200,51 +226,6 @@ def stddev(data, ddof=0):
 def mean(values):
     return sum(values) / len(values)
 
-################ Wifi Connection ################
-try:
-    if wifi.radio.ipv4_address is None and internet:
-        print("connecting to wifi")
-        wifi.radio.connect(os.getenv('CIRCUITPY_WIFI_SSID'),
-                        os.getenv('CIRCUITPY_WIFI_PASSWORD'))
-        print(f"local address {wifi.radio.ipv4_address}")
-except Exception as e:
-    print("Failed to connect to Wi-Fi: ", repr(e))
-    print("Resetting microcontroller in 30 seconds")
-    time.sleep(30)
-    microcontroller.reset()
-
-aio_username = os.getenv('AIO_USERNAME')
-aio_key = os.getenv('AIO_KEY')
-
-################ Initialise MQTT ################
-try:
-    if internet:
-        pool = socketpool.SocketPool(wifi.radio)
-        mqtt_client = MQTT.MQTT(
-            broker="io.adafruit.com",
-            port=1883,
-            username=aio_username,
-            password=aio_key,
-            socket_pool=pool,
-            ssl_context=ssl.create_default_context()
-        )
-        # Initialize an Adafruit IO MQTT Client
-        io = IO_MQTT(mqtt_client)
-        # Setup callbacks here
-        io.on_connect = connected
-        io.on_disconnect = disconnected
-        io.on_subscribe = subscribe
-        io.add_feed_callback("project.scenario", on_scenario_msg)
-        io.connect()
-        print("connected to io")
-        # Setup subscribes here
-        io.subscribe("project.scenario")
-except Exception as e:
-    print("Error in network setup:\n", repr(e))
-    print("Resetting microcontroller in 20 seconds")
-    time.sleep(20)
-    microcontroller.reset()
-
 ################ List of sensors ################
 SENSOR_LIST = [
     {
@@ -272,7 +253,7 @@ SENSOR_LIST = [
 
 if internet:
     SENSOR_LIST.append({
-        "ON": 10,
+        "ON": 4,
         "PREV_TIME": -1,
         "OBJECT": io
     })
@@ -348,10 +329,10 @@ lux_data = []
 while True:
     try:
         if scenario_number == 1:
-            # nice morning
-            pavilion_day_anim.animate()
+            # nice morning, no light
+            pass
         elif scenario_number == 2:
-            # scorching sun
+            # scorching sun, no light
             pass
         elif scenario_number == 3:
             # rain
@@ -415,17 +396,18 @@ while True:
                         sensor["PRESENCE_VALUE"] = 'Present' if stddev(sensor["VALUES"]) > 2 else 'Not Present'
                         print('ToF Standard Deviation: {}mm'.format(stddev(sensor["VALUES"])))
                 
-                if type(sensor["OBJECT"]) is IO_MQTT:
+                if type(sensor["OBJECT"]) is IO_HTTP:
                     sensor["PREV_TIME"] = now
-                    # Package up all the data and send it to MQTT
+                    # Package up all the data and send it to Adafruit IO
+                    # At the same time, run a receive data command!
                     try:
-                        io.loop()
-                        io.publish('project.sensor-data', json.dumps({
+                        io.send_data(sensor_feed["key"], json.dumps({
                             "Temperature": SENSOR_LIST[1]["TEMP_VALUE"],
                             "Humidity": SENSOR_LIST[1]["HUMD_VALUE"],
                             "Human Activity": SENSOR_LIST[2]["PRESENCE_VALUE"],
                             "Luminosity": round(SENSOR_LIST[0]["LUX_VALUE"],2)
                         }))
+                        print('received data:', io.receive_data(scenario_feed["key"]))
                     except Exception as e:
                         print('Error sending data to IO:', repr(e))
                         print(f"Local address {wifi.radio.ipv4_address}")
