@@ -48,6 +48,8 @@ internet = True    # Connect to internet?
 ################ Important environment variables ################
 brightness_multiplier = 0 # This ranges from 0.0 to 1.0
 scenario_number = 1
+scene_motor_start = False # False if scene does not start motor, True if scene needs to start motor. 
+                          # Turns to false after the scene is complete
 
 ################ Initialise hardware ################
 i2c = busio.I2C(scl=board.GP13, sda=board.GP12, frequency=50000)
@@ -150,6 +152,7 @@ def disconnected(client):
 
 def on_scenario_msg(client, topic, message):
     global scenario_number
+    global scene_motor_start
     # Method called whenever project.scenario has a new value
     #print("New message on topic {0}: {1} ".format(topic, message))
     # one scenario will last forever until it has been turned off
@@ -164,9 +167,11 @@ def on_scenario_msg(client, topic, message):
         elif message == 's3':
             print('scenario 3 invoked') # rain
             scenario_number = 3
+            scene_motor_start = True
         elif message == 's4':
             print('scenario 4 invoked') # night
             scenario_number = 4
+            scene_motor_start = True
         elif message == 's5':
             print('scenario 5 invoked') # secret mode
             scenario_number = 5
@@ -279,7 +284,7 @@ if internet:
 
 MOTOR_LIST = [
     {
-        "ON": 5,            # Interval to switch on for
+        "ON": 10,            # Interval to switch on for
         "OFF": 5,           # Interval to switch off for
         "PREV_TIME": -1,    # Previous time
         "MOTOR": motor_1    # Motor object
@@ -348,20 +353,65 @@ lux_data = []
 while True:
     try:
         if scenario_number == 1:
-            # nice morning
-            pavilion_day_anim.animate()
+            # nice morning, turn off all lights
+            brightness_multiplier = 0
+            pavilion_pixels.fill((0,0,0))
+            pavilion_pixels.show()
         elif scenario_number == 2:
-            # scorching sun
-            pass
-        elif scenario_number == 3:
-            # rain
+            # rainy afternoon
+            # Input is light sensor, user hand simulates darkening of the sky. 
+            # Output: web app and lighting brightness variation
             pavilion_rain_anim.animate()
+            # brightness_multiplier is taken care of by the lux sensing code below
+        elif scenario_number == 3:
+            # scorching sun
+            # input: None, Output: Shade deployment motor, turn off all lights
+            brightness_multiplier = 0
+            pavilion_pixels.fill((0,0,0))
+            pavilion_pixels.show()
+            # start the motor
+            if scene_motor_start and (MOTOR_LIST[0]["MOTOR"].throttle == 0 or MOTOR_LIST[0]["MOTOR"].throttle == None):
+                # retract shade
+                MOTOR_LIST[0]["MOTOR"].throttle = -1
+                MOTOR_LIST[0]["PREV_TIME"] = now
+                scene_motor_start = False # stop the motor after the scene is over
+            # stop the motor
+            if now >= MOTOR_LIST[0]["PREV_TIME"] + MOTOR_LIST[0]["ON"]:
+                MOTOR_LIST[0]["MOTOR"].throttle = 0
         elif scenario_number == 4:
-            # night
+            # night, turn on mood lighting but keep path illuminated
+            # Output: nice lights, retract motor
+            # brightness_multiplier is taken care of by the lux sensing code below
             pavilion_night_anim.animate()
+            # start the motor
+            if scene_motor_start and (MOTOR_LIST[0]["MOTOR"].throttle == 0 or MOTOR_LIST[0]["MOTOR"].throttle == None):
+                # retract shade
+                MOTOR_LIST[0]["MOTOR"].throttle = 1
+                MOTOR_LIST[0]["PREV_TIME"] = now
+                scene_motor_start = False # stop the motor after the scene is over
+            # stop the motor
+            if now >= MOTOR_LIST[0]["PREV_TIME"] + MOTOR_LIST[0]["ON"]:
+                MOTOR_LIST[0]["MOTOR"].throttle = 0
+        elif scenario_number == 5:
+            pavilion_rave_anim.animate()
         
+        # every 2 seconds, motor on, motor off, motor reverse, motor off
+        if test_motor:
+            for motor in MOTOR_LIST:
+                if motor["MOTOR"].throttle == -1:
+                    if now >= motor["PREV_TIME"] + motor["ON"]:
+                        # Action to do when motor is transitioning from ON to OFF
+                        motor["PREV_TIME"] = now
+                        motor["MOTOR"].throttle = 1
+                if motor["MOTOR"].throttle == 1 or motor["MOTOR"].throttle == None:
+                    if now >= motor["PREV_TIME"] + motor["OFF"]:
+                        # Action to do when motor is transitioning from OFF to ON
+                        motor["PREV_TIME"] = now
+                        motor["MOTOR"].throttle = -1
+
         smokebox_anim.animate()
         now = time.monotonic()
+
         # ping adafruit MQTT. known bug that this will be blocking and cause delays, so account for it accordingly
         # try:
         #     if internet:
@@ -373,6 +423,7 @@ while True:
         lux_data.append(int(SENSOR_LIST[0]["OBJECT"].lux))
         if len(lux_data) > 100:
             lux_data.pop(0)
+        if scenario_number == 2 or scenario_number > 3:
             # max lux is around x=500 & y=0, min lux is x=0 & y=1, 
             brightness_multiplier = -0.002 * mean(lux_data) + 1
             pavilion_pixels.brightness = brightness_multiplier
@@ -430,20 +481,6 @@ while True:
                         print('Error sending data to IO:', repr(e))
                         print(f"Local address {wifi.radio.ipv4_address}")
                         raise e
-
-        # every 2 seconds, motor on, motor off, motor reverse, motor off
-        if test_motor:
-            for motor in MOTOR_LIST:
-                if motor["MOTOR"].throttle == -1:
-                    if now >= motor["PREV_TIME"] + motor["ON"]:
-                        # Action to do when motor is transitioning from ON to OFF
-                        motor["PREV_TIME"] = now
-                        motor["MOTOR"].throttle = 1
-                if motor["MOTOR"].throttle == 1 or motor["MOTOR"].throttle == None:
-                    if now >= motor["PREV_TIME"] + motor["OFF"]:
-                        # Action to do when motor is transitioning from OFF to ON
-                        motor["PREV_TIME"] = now
-                        motor["MOTOR"].throttle = -1
 
         for light in LIGHT_LIST:
             if now >= light["PREV_TIME"] + light["ON"]:
