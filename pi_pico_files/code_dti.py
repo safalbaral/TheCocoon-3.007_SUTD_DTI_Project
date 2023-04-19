@@ -18,16 +18,52 @@ from pioasm_neopixel_bg import NeoPixelBackground
 import rainbowio
 import supervisor
 
+import neopixel
+
+from adafruit_led_animation.animation.solid import Solid
+from adafruit_led_animation.animation.colorcycle import ColorCycle
+from adafruit_led_animation.animation.blink import Blink
+from adafruit_led_animation.animation.comet import Comet
+from adafruit_led_animation.animation.chase import Chase
+from adafruit_led_animation.animation.pulse import Pulse
+from adafruit_led_animation.animation.sparklepulse import SparklePulse
+from adafruit_led_animation.animation.sparkle import Sparkle
+from adafruit_led_animation.sequence import AnimationSequence
+from adafruit_led_animation.color import (
+    PURPLE,
+    WHITE,
+    JADE,
+    TEAL,
+    AQUA,
+    MAGENTA,
+    ORANGE,
+    YELLOW,
+    GREEN,
+    RED,
+    AMBER,
+)
+
 ################ Constants for program settings ################
 test_motor = False  # Power Motor up?
 internet = False    # Connect to internet?
 
+################ Important environment variables ################
+brightness_multiplier = 0 # This ranges from 0.0 to 1.0
 
 ################ Initialise hardware ################
 i2c = busio.I2C(scl=board.GP13, sda=board.GP12, frequency=50000)
+
 try:
-    light_sensor = adafruit_bh1750.BH1750(i2c)
+    while not i2c.try_lock():
+        pass
+    print(
+        "I2C addresses found:",
+        [hex(device_address) for device_address in i2c.scan()],
+    )
+    i2c.unlock()
+
     tof_sensor = adafruit_vl53l0x.VL53L0X(i2c)
+    light_sensor = adafruit_bh1750.BH1750(i2c)
 
     dht_sensor = adafruit_dht.DHT11(board.GP14)
 except Exception as e:
@@ -42,15 +78,54 @@ pwm17_motor1 = pwmio.PWMOut(board.GP17, frequency=1000)
 motor_1 = motor.DCMotor(pwm16_motor1, pwm17_motor1)
 motor_1.decay_mode = (motor.SLOW_DECAY)
 
-pwm15_ledfilament = pwmio.PWMOut(board.GP15, frequency=1000)
+# Trees
+pwm7_ledfilament = pwmio.PWMOut(board.GP7, frequency=1000)
+pwm8_ledfilament = pwmio.PWMOut(board.GP8, frequency=1000)
+pwm9_ledfilament = pwmio.PWMOut(board.GP9, frequency=1000)
+
+# Pavilion
 pwm11_ledfilament = pwmio.PWMOut(board.GP11, frequency=1000)
 pwm10_ledfilament = pwmio.PWMOut(board.GP10, frequency=1000)
 
-NEOPIXEL = board.GP22
-NUM_PIXELS = 7
-pixels = NeoPixelBackground(NEOPIXEL, NUM_PIXELS)
-pixels.brightness = 0.5
+# Neopixel init
+pavilion_pixels = neopixel.NeoPixel(board.GP22, 7, brightness=0.5, auto_write=False)
 
+comet = Comet(pavilion_pixels, speed=0.01, color=PURPLE, tail_length=10, bounce=True)
+pulse_yellow = Pulse(pavilion_pixels, speed=0.05, color=YELLOW, period=5)
+pulse_amber = Pulse(pavilion_pixels, speed=0.05, color=(255, 130, 0), period=5)
+pulse_jade = Pulse(pavilion_pixels, speed=0.05, color=JADE, period=5)
+sparkle_lightblue = SparklePulse(pavilion_pixels, speed=0.05, color=AQUA, period=5, max_intensity=0.3, min_intensity=0.1)
+# sparkle_lightblue = Sparkle(pavilion_pixels, speed=0.2, color=AQUA, num_sparkles=5)
+
+smokebox_pixels = neopixel.NeoPixel(board.GP6, 3, brightness=0.5, auto_write=False)
+pulse_jade_2 = Pulse(smokebox_pixels, speed=0.05, color=JADE, period=5)
+pulse_red_2 = Pulse(smokebox_pixels, speed=0.05, color=RED, period=5)
+
+pavilion_day_anim = AnimationSequence(
+    pulse_jade,
+    advance_interval=5,
+    auto_clear=False,
+)
+
+pavilion_rain_anim = AnimationSequence(
+    pulse_yellow,
+    pulse_amber,
+    advance_interval=5,
+    auto_clear=False,
+)
+
+pavilion_night_anim = AnimationSequence(
+    sparkle_lightblue,
+    advance_interval=5,
+    auto_clear=False,
+)
+
+smokebox_anim = AnimationSequence(
+    pulse_jade_2,
+    pulse_red_2,
+    advance_interval=5,
+    auto_clear=False,
+)
 
 ################ MQTT Callbacks ################
 # pylint: disable=unused-argument
@@ -106,6 +181,9 @@ def stddev(data, ddof=0):
     ss = _ss(data)
     pvar = ss/(n-ddof)
     return pvar**0.5
+
+def mean(values):
+    return sum(values) / len(values)
 
 ################ Wifi Connection ################
 try:
@@ -214,7 +292,23 @@ LIGHT_LIST = [
         "ON": 0.01,
         "OFF": 5,
         "PREV_TIME": -1,
-        "PIN": pwm15_ledfilament,
+        "PIN": pwm9_ledfilament,
+        "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
+        "FADE_DIR": True
+    },
+    {
+        "ON": 0.01,
+        "OFF": 5,
+        "PREV_TIME": -1,
+        "PIN": pwm8_ledfilament,
+        "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
+        "FADE_DIR": True
+    },
+    {
+        "ON": 0.01,
+        "OFF": 5,
+        "PREV_TIME": -1,
+        "PIN": pwm7_ledfilament,
         "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
         "FADE_DIR": True
     }
@@ -226,8 +320,15 @@ print('activated!')
 
 error_count = 0
 
+
+# Data collection for luminosity
+lux_data = []
+
 while True:
     try:
+        # pavilion_day_anim.animate()
+        pavilion_rain_anim.animate()
+        smokebox_anim.animate()
         now = time.monotonic()
         # ping adafruit MQTT. known bug that this will be blocking and cause delays, so account for it accordingly
         # try:
@@ -235,6 +336,14 @@ while True:
         #         io.loop()
         # except Exception as e:
         #     print('io.loop exception:', repr(e))
+
+        # Perform computation for lux sensing and adjust brightness
+        lux_data.append(int(SENSOR_LIST[0]["OBJECT"].lux))
+        if len(lux_data) > 100:
+            lux_data.pop(0)
+            # max lux is around 300, min lux is 0
+            brightness_multiplier = -0.0023 * mean(lux_data) + 0.7
+            pavilion_pixels.brightness = brightness_multiplier
 
         # This section reads live data from sensors and sends them
         for sensor in SENSOR_LIST:
@@ -270,8 +379,8 @@ while True:
                     if len(sensor["VALUES"]) > 10:
                         sensor["VALUES"].pop(0)
                     if len(sensor["VALUES"]) > 4:
-                        # Human presence is based on whether the standard deviation exceeds 5, which is reasonable
-                        sensor["PRESENCE_VALUE"] = 'Present' if stddev(sensor["VALUES"]) > 5 else 'Not Present'
+                        # Human presence is based on whether the standard deviation exceeds 2, which is for inside the pavilion
+                        sensor["PRESENCE_VALUE"] = 'Present' if stddev(sensor["VALUES"]) > 2 else 'Not Present'
                         print('ToF Standard Deviation: {}mm'.format(stddev(sensor["VALUES"])))
                 
                 if type(sensor["OBJECT"]) is IO_MQTT:
@@ -303,28 +412,27 @@ while True:
                         motor["PREV_TIME"] = now
                         motor["MOTOR"].throttle = -1
 
-        # for light in LIGHT_LIST:
-        #     if now >= light["PREV_TIME"] + light["ON"]:
-        #         if light["FADE_DIR"] == True:
-        #             # increase brightness
-        #             light["PWM"] += 255
-        #         elif light["FADE_DIR"] == False:
-        #             # decrease brightness
-        #             light["PWM"] -= 255
+        for light in LIGHT_LIST:
+            if now >= light["PREV_TIME"] + light["ON"]:
+                if light["FADE_DIR"] == True:
+                    # increase brightness
+                    light["PWM"] += 255
+                elif light["FADE_DIR"] == False:
+                    # decrease brightness
+                    light["PWM"] -= 255
                 
-        #         # apply changes
-        #         light["PIN"].duty_cycle = light["PWM"]
-        #         light["PREV_TIME"] = now
+                # apply changes with luminosity in mind
+                light["PIN"].duty_cycle = int(light["PWM"] * brightness_multiplier)
+                light["PREV_TIME"] = now
 
-        #         # change direction of fade
-        #         if light["PWM"] < 0x0002:
-        #             light["FADE_DIR"] = True
-        #             # increase brightness
-        #         elif light["PWM"] > 0xfff1:
-        #             light["FADE_DIR"] = False
-        #             # decrease brightness
-                
-        pixels.fill(rainbowio.colorwheel(supervisor.ticks_ms() // 16))
+                # change direction of fade
+                if light["PWM"] < 0x0f00:
+                    light["FADE_DIR"] = True
+                    # increase brightness
+                elif light["PWM"] > 0xfff1:
+                    light["FADE_DIR"] = False
+                    # decrease brightness
+    
     except Exception as e:
         print('General Error Detected:', repr(e))
         error_count += 1
