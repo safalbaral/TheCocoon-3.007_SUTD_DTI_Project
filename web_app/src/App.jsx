@@ -57,7 +57,7 @@ const SensorsScreen = ({changeActiveScreen}) => {
               <i class="bi bi-cpu"></i>
               <h2 class="card-title"> Sensor Data</h2>
             </div>
-              <p className={mqttRequestReceived ? 'flash-green' : ''}>Updated every 4 seconds</p>
+              <p className={mqttRequestReceived ? 'flash-green' : ''}> <strong>Updated every 10 seconds</strong></p>
               <div className={mqttRequestReceived ? 'flash-green' : ''}>
                 <RenderSensors sensorsData={sensorsData} mqttRequestReceived={mqttRequestReceived} />
               </div>
@@ -136,6 +136,11 @@ const MainScreen = ({changeActiveScreen}) => {
               <i class={weatherStates[weatherIndex].icon_class}></i>
               <h2 class="card-title"> {weatherStates[weatherIndex].weather} </h2>
             </div>
+            <div>
+              <h5 style={{color: 'green'}}> <span>Conditions:</span> <span>{weatherStates[weatherIndex].description}</span></h5>
+              <h5 style={{color: 'darkgreen'}}> <span>Reaction:</span> <span>{weatherStates[weatherIndex].effect}</span></h5>
+            </div>
+            <br />
             <RenderSimulatedWeatherData weatherState={weatherStates[weatherIndex]} />
             <div class="row mt-4">
             <div class="col-md-12 text-center">

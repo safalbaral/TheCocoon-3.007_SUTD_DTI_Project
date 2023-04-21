@@ -10,16 +10,18 @@ export const weatherStates = [
         'Luminosity': 'Moderate',
         'LED Filaments for Trees': 'Switches off entirely',
         'Exterior Pavillion Lights': 'Switches off entirely',
-        'Lights in Smoke Boxes': 'Will cycle randomly',
+        //'Lights in Smoke Boxes': 'Changes to red if in use, green if avaliable.',
         'Pavillion Indoor Lights': 'Switch off entirely',
-        'Motorized shading of tree': 'Remains retracted',
-        'LED lighting of large tree': 'Remains off'
+        'Motorized shading of tree': 'Remains retracted'
+        //'LED lighting of large tree': 'Remains off'
       },
       'id': 0,
       'scenario': 's1',
       'weather': 'Sunny',
       'background_image': s1_background,
-      'icon_class': 'bi bi-sun' // icon class for Sunny weather
+      'icon_class': 'bi bi-sun', // icon class for Sunny weather
+      'description': 'Clear skies and pleasant morning',
+      'effect': 'The Cocoon does not interfere much'
     },
     {
       'data_to_render': {
@@ -27,16 +29,18 @@ export const weatherStates = [
         'Luminosity': 'High',
         'LED Filaments for Trees': 'Switches off entirely',
         'Exterior Pavillion Lights': 'Switches off entirely',
-        'Lights in Smoke Boxes': 'Will cycle randomly',
+        //'Lights in Smoke Boxes': 'Changes to red if in use, green if avaliable.',
         'Pavillion Indoor Lights': 'Switch off entirely',
-        'Motorized shading of tree': 'Remains retracted',
-        'LED lighting of large tree': 'Remains off'
+        'Motorized shading of tree': 'Remains retracted'
+        //'LED lighting of large tree': 'Remains off'
       },
       'id': 1,
-      'scenario': 's2',
+      'scenario': 's3',
       'weather': 'Extremely Sunny',
       'background_image': s2_background,
-      'icon_class': 'bi bi-sun' // icon class for Sunny weather
+      'icon_class': 'bi bi-sun', // icon class for Sunny weather
+      'description': 'Scorching hot afternoon',
+      'effect': 'The Cocoon creates a cooling atmosphere.'
     },
     {
       'data_to_render': {
@@ -44,16 +48,18 @@ export const weatherStates = [
         'Luminosity': 'Low (due to clouds)',
         'LED Filaments for Trees': 'Switches on',
         'Exterior Pavillion Lights': 'Switches on',
-        'Lights in Smoke Boxes': 'Will cycle randomly',
+        //'Lights in Smoke Boxes': 'Changes to red if in use, green if avaliable.',
         'Pavillion Indoor Lights': 'Switches on and shows a yellow aura',
-        'Motorized shading of tree': 'Extends to full extent',
-        'LED lighting of large tree': 'Turns on'
+        'Motorized shading of tree': 'Extends to full extent'
+        //'LED lighting of large tree': 'Turns on'
       },
       'id': 2,
-      'scenario': 's3',
+      'scenario': 's2',
       'weather': 'Rainy',
       'background_image': s3_background,
-      'icon_class': 'bi bi-cloud-rain' // icon class for Rainy weather
+      'icon_class': 'bi bi-cloud-rain', // icon class for Rainy weather
+      'description': 'Stormy Afternoon',
+      'effect': 'The Cocoon creates a homey and warm atmosphere.'
     },
     {
       'data_to_render': {
@@ -61,15 +67,17 @@ export const weatherStates = [
         'Luminosity': 'Low (at night)',
         'LED Filaments for Trees': 'Switches on',
         'Exterior Pavillion Lights': 'Switches on',
-        'Lights in Smoke Boxes': 'Will cycle randomly',
+        //'Lights in Smoke Boxes': 'Changes to red if in use, green if avaliable.',
         'Pavillion Indoor Lights': 'Switches on and shows a light blue (inspired by bioluminescent caves)',
-        'Motorized shading of tree': 'Remains retracted',
-        'LED lighting of large tree': 'Remains retracted'
+        'Motorized shading of tree': 'Remains retracted'
+        //'LED lighting of large tree': 'Remains retracted'
       },
       'id': 3,
       'scenario': 's4',
-      'weather': 'Clear',
+      'weather': 'Clear Night',
       'background_image': s4_background,
-      'icon_class': 'bi bi-moon' // icon class for Clear weather
+      'icon_class': 'bi bi-moon', // icon class for Clear weather
+      'description': 'Starry clear night',
+      'effect': 'Like bioluminescent caves the pavillion sparkels when people walk past.'
     }
   ];
