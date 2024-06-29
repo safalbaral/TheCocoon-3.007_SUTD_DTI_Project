@@ -14,10 +14,7 @@ import adafruit_dht
 import adafruit_bh1750
 import adafruit_vl53l0x
 from adafruit_motor import motor
-from pioasm_neopixel_bg import NeoPixelBackground
-import rainbowio
-import supervisor
-
+import random
 import neopixel
 
 from adafruit_led_animation.animation.solid import Solid
@@ -28,6 +25,7 @@ from adafruit_led_animation.animation.chase import Chase
 from adafruit_led_animation.animation.pulse import Pulse
 from adafruit_led_animation.animation.sparklepulse import SparklePulse
 from adafruit_led_animation.animation.sparkle import Sparkle
+from adafruit_led_animation.animation.rainbowsparkle import RainbowSparkle
 from adafruit_led_animation.sequence import AnimationSequence
 from adafruit_led_animation.color import (
     PURPLE,
@@ -41,14 +39,18 @@ from adafruit_led_animation.color import (
     GREEN,
     RED,
     AMBER,
+    GOLD,
 )
 
 ################ Constants for program settings ################
 test_motor = False  # Power Motor up?
-internet = False    # Connect to internet?
+internet = True    # Connect to internet?
 
 ################ Important environment variables ################
 brightness_multiplier = 0 # This ranges from 0.0 to 1.0
+scenario_number = 1
+scene_motor_start = False # False if scene does not start motor, True if scene needs to start motor. 
+                          # Turns to false after the scene is complete
 
 ################ Initialise hardware ################
 i2c = busio.I2C(scl=board.GP13, sda=board.GP12, frequency=50000)
@@ -90,16 +92,18 @@ pwm10_ledfilament = pwmio.PWMOut(board.GP10, frequency=1000)
 # Neopixel init
 pavilion_pixels = neopixel.NeoPixel(board.GP22, 7, brightness=0.5, auto_write=False)
 
-comet = Comet(pavilion_pixels, speed=0.01, color=PURPLE, tail_length=10, bounce=True)
+comet = Comet(pavilion_pixels, speed=0.1, color=YELLOW, tail_length=10, bounce=True)
 pulse_yellow = Pulse(pavilion_pixels, speed=0.05, color=YELLOW, period=5)
 pulse_amber = Pulse(pavilion_pixels, speed=0.05, color=(255, 130, 0), period=5)
+sparkle_amber = Sparkle(pavilion_pixels, speed=0.1, color=AMBER, num_sparkles=1)
 pulse_jade = Pulse(pavilion_pixels, speed=0.05, color=JADE, period=5)
 sparkle_lightblue = SparklePulse(pavilion_pixels, speed=0.05, color=AQUA, period=5, max_intensity=0.3, min_intensity=0.1)
-# sparkle_lightblue = Sparkle(pavilion_pixels, speed=0.2, color=AQUA, num_sparkles=5)
+rainbow_sparkle = RainbowSparkle(pavilion_pixels, speed=0.05, num_sparkles=2)
 
 smokebox_pixels = neopixel.NeoPixel(board.GP6, 3, brightness=0.5, auto_write=False)
-pulse_jade_2 = Pulse(smokebox_pixels, speed=0.05, color=JADE, period=5)
-pulse_red_2 = Pulse(smokebox_pixels, speed=0.05, color=RED, period=5)
+
+# pulse_jade_2 = Pulse(smokebox_pixels, speed=0.05, color=JADE, period=5)
+# pulse_red_2 = Pulse(smokebox_pixels, speed=0.05, color=AMBER, period=5)
 
 pavilion_day_anim = AnimationSequence(
     pulse_jade,
@@ -120,12 +124,18 @@ pavilion_night_anim = AnimationSequence(
     auto_clear=False,
 )
 
-smokebox_anim = AnimationSequence(
-    pulse_jade_2,
-    pulse_red_2,
+pavilion_rave_anim = AnimationSequence(
+    rainbow_sparkle,
     advance_interval=5,
     auto_clear=False,
 )
+
+# smokebox_anim = AnimationSequence(
+#     pulse_jade_2,
+#     pulse_red_2,
+#     advance_interval=5,
+#     auto_clear=False,
+# )
 
 ################ MQTT Callbacks ################
 # pylint: disable=unused-argument
@@ -143,18 +153,30 @@ def disconnected(client):
     print("Disconnected from Adafruit IO!")
 
 def on_scenario_msg(client, topic, message):
+    global scenario_number
+    global scene_motor_start
     # Method called whenever project.scenario has a new value
     #print("New message on topic {0}: {1} ".format(topic, message))
     # one scenario will last forever until it has been turned off
+    print("message rx: ", topic, ",", message)
     if topic == 'neelonoon/f/project.scenario':
         if message == 's1':
-            print('scenario 1 invoked')
+            print('scenario 1 invoked') # fair day
+            scenario_number = 1
         elif message == 's2':
-            print('scenario 2 invoked')
+            print('scenario 2 invoked') # scorching sun
+            scenario_number = 2
+            scene_motor_start = True
         elif message == 's3':
-            print('scenario 3 invoked')
+            print('scenario 3 invoked') # rain
+            scenario_number = 3
         elif message == 's4':
-            print('scenario 4 invoked')
+            print('scenario 4 invoked') # night
+            scenario_number = 4
+            scene_motor_start = True
+        elif message == 's5':
+            print('scenario 5 invoked') # secret mode
+            scenario_number = 5
 
 ################ Helper Functions ################
 
@@ -251,20 +273,20 @@ SENSOR_LIST = [
         "PREV_TIME": -1,
         "OBJECT": tof_sensor,
         "VALUES": [],
-        "PRESENCE_VALUE": "No"
+        "PRESENCE_VALUE": "Not Present"
     }
 ]
 
 if internet:
     SENSOR_LIST.append({
-        "ON": 4,
+        "ON": 10,
         "PREV_TIME": -1,
         "OBJECT": io
     })
 
 MOTOR_LIST = [
     {
-        "ON": 5,            # Interval to switch on for
+        "ON": 10,            # Interval to switch on for
         "OFF": 5,           # Interval to switch off for
         "PREV_TIME": -1,    # Previous time
         "MOTOR": motor_1    # Motor object
@@ -275,23 +297,15 @@ LIGHT_LIST = [
     {
         "ON": 0.01,
         "OFF": 5,
-        "PREV_TIME": -1,
-        "PIN": pwm11_ledfilament,
+        "PREV_TIME": 0,
+        "PIN": pwm7_ledfilament,
         "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
         "FADE_DIR": True
     },
     {
         "ON": 0.01,
         "OFF": 5,
-        "PREV_TIME": -1,
-        "PIN": pwm10_ledfilament,
-        "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
-        "FADE_DIR": True
-    },
-    {
-        "ON": 0.01,
-        "OFF": 5,
-        "PREV_TIME": -1,
+        "PREV_TIME": 0,
         "PIN": pwm9_ledfilament,
         "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
         "FADE_DIR": True
@@ -299,7 +313,7 @@ LIGHT_LIST = [
     {
         "ON": 0.01,
         "OFF": 5,
-        "PREV_TIME": -1,
+        "PREV_TIME": 0,
         "PIN": pwm8_ledfilament,
         "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
         "FADE_DIR": True
@@ -307,8 +321,16 @@ LIGHT_LIST = [
     {
         "ON": 0.01,
         "OFF": 5,
-        "PREV_TIME": -1,
-        "PIN": pwm7_ledfilament,
+        "PREV_TIME": 0,
+        "PIN": pwm10_ledfilament,
+        "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
+        "FADE_DIR": True
+    },
+    {
+        "ON": 0.01,
+        "OFF": 5,
+        "PREV_TIME": 0,
+        "PIN": pwm11_ledfilament,
         "PWM": 0, # note: this is a 16-bit integer, maximum 0xffff
         "FADE_DIR": True
     }
@@ -318,18 +340,99 @@ print('sleeping before activation...')
 time.sleep(5)
 print('activated!')
 
-error_count = 0
+smokebox_prevtime = 0
+smokebox_delay = 20
 
+# Reset time.monotonic for lights so they glow in sequence
+now = time.monotonic()
+delay = 1
+for i, light in enumerate(LIGHT_LIST):
+    light['PREV_TIME'] = now + (delay * (i + 1))
+
+# Reset smoke box colours
+smokebox_pixels[0] = AMBER if round(random.uniform(0,1)) == 1 else GREEN
+smokebox_pixels[1] = AMBER if round(random.uniform(0,1)) == 1 else GREEN
+smokebox_pixels[2] = AMBER if round(random.uniform(0,1)) == 1 else GREEN
+smokebox_pixels.show()
+
+error_count = 0
 
 # Data collection for luminosity
 lux_data = []
 
 while True:
     try:
-        # pavilion_day_anim.animate()
-        pavilion_rain_anim.animate()
-        smokebox_anim.animate()
         now = time.monotonic()
+
+        if scenario_number == 1:
+            # nice morning, turn off all lights
+            brightness_multiplier = 0
+            pavilion_pixels.fill((0,0,0))
+            pavilion_pixels.show()
+        elif scenario_number == 2:
+            # rainy afternoon
+            # Input is light sensor, user hand simulates darkening of the sky. 
+            # Output: web app and lighting brightness variation
+            pavilion_rain_anim.animate()
+            # brightness_multiplier is taken care of by the lux sensing code below
+            # start the motor
+            if scene_motor_start and (MOTOR_LIST[0]["MOTOR"].throttle == 0 or MOTOR_LIST[0]["MOTOR"].throttle == None):
+                # extend shade
+                MOTOR_LIST[0]["MOTOR"].throttle = -1
+                MOTOR_LIST[0]["PREV_TIME"] = now
+                scene_motor_start = False # stop the motor after the scene is over
+            # stop the motor
+            if now >= MOTOR_LIST[0]["PREV_TIME"] + MOTOR_LIST[0]["ON"]:
+                MOTOR_LIST[0]["MOTOR"].throttle = 0
+        elif scenario_number == 3:
+            # scorching sun
+            # input: None, Output: Shade deployment motor, turn off all lights
+            brightness_multiplier = 0
+            pavilion_pixels.fill((0,0,0))
+            pavilion_pixels.show()
+        elif scenario_number == 4:
+            # night, turn on mood lighting but keep path illuminated
+            # mood lighting depends on ToF sensor now
+            # path lighting is kept solid for safety and illumination purposes
+
+            # Output: nice lights, retract motor
+            # brightness_multiplier is taken care of by the lux sensing code below
+            pavilion_night_anim.animate()
+            # start the motor
+            if scene_motor_start and (MOTOR_LIST[0]["MOTOR"].throttle == 0 or MOTOR_LIST[0]["MOTOR"].throttle == None):
+                # retract shade
+                MOTOR_LIST[0]["MOTOR"].throttle = 1
+                MOTOR_LIST[0]["PREV_TIME"] = now
+                scene_motor_start = False # stop the motor after the scene is over
+            # stop the motor
+            if now >= MOTOR_LIST[0]["PREV_TIME"] + MOTOR_LIST[0]["ON"]:
+                MOTOR_LIST[0]["MOTOR"].throttle = 0
+        elif scenario_number == 5:
+            pavilion_rave_anim.animate()
+        
+        # every 2 seconds, motor on, motor off, motor reverse, motor off
+        if test_motor:
+            for motor in MOTOR_LIST:
+                if motor["MOTOR"].throttle == -1:
+                    if now >= motor["PREV_TIME"] + motor["ON"]:
+                        # Action to do when motor is transitioning from ON to OFF
+                        motor["PREV_TIME"] = now
+                        motor["MOTOR"].throttle = 1
+                if motor["MOTOR"].throttle == 1 or motor["MOTOR"].throttle == None:
+                    if now >= motor["PREV_TIME"] + motor["OFF"]:
+                        # Action to do when motor is transitioning from OFF to ON
+                        motor["PREV_TIME"] = now
+                        motor["MOTOR"].throttle = -1
+
+        # new smoke box animation, randomly chosen
+        if now >= smokebox_prevtime + smokebox_delay:
+            smokebox_prevtime = now
+            smokebox_delay = round(random.uniform(10,20))
+            smokebox_pixels[0] = YELLOW if round(random.uniform(0,1)) == 1 else GREEN
+            smokebox_pixels[1] = YELLOW if round(random.uniform(0,1)) == 1 else GREEN
+            smokebox_pixels[2] = YELLOW if round(random.uniform(0,1)) == 1 else GREEN
+            smokebox_pixels.show()
+
         # ping adafruit MQTT. known bug that this will be blocking and cause delays, so account for it accordingly
         # try:
         #     if internet:
@@ -341,8 +444,13 @@ while True:
         lux_data.append(int(SENSOR_LIST[0]["OBJECT"].lux))
         if len(lux_data) > 100:
             lux_data.pop(0)
-            # max lux is around 300, min lux is 0
-            brightness_multiplier = -0.0023 * mean(lux_data) + 0.7
+        if scenario_number == 2 or scenario_number == 5:
+            # max lux is around x=500 & y=0, min lux is x=0 & y=1, 
+            brightness_multiplier = -0.002 * mean(lux_data) + 1
+            pavilion_pixels.brightness = brightness_multiplier
+        if scenario_number == 4:
+            # use ToF to determine brightness
+            brightness_multiplier = 0.6 if SENSOR_LIST[2]["PRESENCE_VALUE"] == "Present" else 0.2
             pavilion_pixels.brightness = brightness_multiplier
 
         # This section reads live data from sensors and sends them
@@ -387,6 +495,7 @@ while True:
                     sensor["PREV_TIME"] = now
                     # Package up all the data and send it to MQTT
                     try:
+                        io.loop()
                         io.publish('project.sensor-data', json.dumps({
                             "Temperature": SENSOR_LIST[1]["TEMP_VALUE"],
                             "Humidity": SENSOR_LIST[1]["HUMD_VALUE"],
@@ -398,40 +507,38 @@ while True:
                         print(f"Local address {wifi.radio.ipv4_address}")
                         raise e
 
-        # every 2 seconds, motor on, motor off, motor reverse, motor off
-        if test_motor:
-            for motor in MOTOR_LIST:
-                if motor["MOTOR"].throttle == -1:
-                    if now >= motor["PREV_TIME"] + motor["ON"]:
-                        # Action to do when motor is transitioning from ON to OFF
-                        motor["PREV_TIME"] = now
-                        motor["MOTOR"].throttle = 1
-                if motor["MOTOR"].throttle == 1 or motor["MOTOR"].throttle == None:
-                    if now >= motor["PREV_TIME"] + motor["OFF"]:
-                        # Action to do when motor is transitioning from OFF to ON
-                        motor["PREV_TIME"] = now
-                        motor["MOTOR"].throttle = -1
-
         for light in LIGHT_LIST:
             if now >= light["PREV_TIME"] + light["ON"]:
-                if light["FADE_DIR"] == True:
-                    # increase brightness
-                    light["PWM"] += 255
-                elif light["FADE_DIR"] == False:
-                    # decrease brightness
-                    light["PWM"] -= 255
-                
-                # apply changes with luminosity in mind
-                light["PIN"].duty_cycle = int(light["PWM"] * brightness_multiplier)
-                light["PREV_TIME"] = now
+                if scenario_number == 1 or scenario_number == 3:
+                    light["PIN"].duty_cycle = 0
+                elif scenario_number == 4:
+                    light["PIN"].duty_cycle = 60000
+                else:
+                    if light["FADE_DIR"] == True:
+                        # increase brightness
+                        light["PWM"] += 255
+                    elif light["FADE_DIR"] == False:
+                        # decrease brightness
+                        light["PWM"] -= 255
+                    
+                    # apply changes with luminosity in mind, bound duty_cycle
+                    duty_cycle = int(light["PWM"] * brightness_multiplier)
+                    if duty_cycle > 65535 or duty_cycle < 0:
+                        print("duty cycle out of bounds:", mean(lux_data))
+                    if duty_cycle < 0:
+                        duty_cycle = 0
+                    if duty_cycle > 65535:
+                        duty_cycle = 65535
+                    light["PIN"].duty_cycle = duty_cycle
+                    light["PREV_TIME"] = now
 
-                # change direction of fade
-                if light["PWM"] < 0x0f00:
-                    light["FADE_DIR"] = True
-                    # increase brightness
-                elif light["PWM"] > 0xfff1:
-                    light["FADE_DIR"] = False
-                    # decrease brightness
+                    # change direction of fade
+                    if light["PWM"] < 0x0f00:
+                        light["FADE_DIR"] = True
+                        # increase brightness
+                    elif light["PWM"] > 0xfff1:
+                        light["FADE_DIR"] = False
+                        # decrease brightness
     
     except Exception as e:
         print('General Error Detected:', repr(e))
